@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pypdf
+pydantic
+python-dotenv
+
+# Future RAG extensions
+langchain
+langchain-community
+tiktoken
+numpy
