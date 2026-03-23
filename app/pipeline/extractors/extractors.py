@@ -9,6 +9,107 @@ from app.pipeline.extractors.base import BaseExtractor, ExtractionError
 from app.schemas.ingestion import DocumentType, ExtractedContentCreate
 
 
+# ── PDF ───────────────────────────────────────────────────────
+
+class PDFExtractor(BaseExtractor):
+    supported_type = DocumentType.PDF
+
+    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise ExtractionError("pypdf not installed. Run: pip install pypdf")
+
+        try:
+            self._ensure_file_exists(file_path)
+            reader = PdfReader(str(file_path))
+        except ExtractionError:
+            raise
+        except Exception as e:
+            raise ExtractionError("Failed to read PDF", original=e) from e
+
+        pages = []
+        all_text = []
+
+        for i, page in enumerate(reader.pages, start=1):
+            text = (page.extract_text() or "").strip()
+            all_text.append(text)
+            pages.append({
+                "page_number": i,
+                "text": text,
+                "word_count": self._word_count(text),
+            })
+
+        raw_text = self._truncate("\n\n".join(filter(None, all_text)))
+
+        return ExtractedContentCreate(
+            tenant_id=tenant_id,
+            raw_text=raw_text,
+            pages=pages,
+            tables=[],
+            warnings=[],
+        )
+
+
+# ── DOCX ──────────────────────────────────────────────────────
+
+class DocxExtractor(BaseExtractor):
+    supported_type = DocumentType.DOCX
+
+    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+        try:
+            from docx import Document
+        except ImportError:
+            raise ExtractionError("python-docx not installed. Run: pip install python-docx")
+
+        try:
+            self._ensure_file_exists(file_path)
+            doc = Document(str(file_path))
+        except ExtractionError:
+            raise
+        except Exception as e:
+            raise ExtractionError("Failed to open DOCX file", original=e) from e
+
+        paragraphs = []
+        all_text = []
+        tables = []
+
+        for i, para in enumerate(doc.paragraphs):
+            text = para.text.strip()
+            if not text:
+                continue
+            all_text.append(text)
+            paragraphs.append({
+                "index": i,
+                "style": para.style.name if para.style else "Normal",
+                "is_heading": para.style.name.startswith("Heading") if para.style else False,
+                "text": text,
+                "word_count": self._word_count(text),
+            })
+
+        for i, table in enumerate(doc.tables):
+            rows = [
+                [cell.text.strip() for cell in row.cells]
+                for row in table.rows
+            ]
+            if rows:
+                tables.append({
+                    "index": i,
+                    "headers": rows[0],
+                    "rows": rows[1:],
+                })
+
+        raw_text = self._truncate("\n\n".join(all_text))
+
+        return ExtractedContentCreate(
+            tenant_id=tenant_id,
+            raw_text=raw_text,
+            pages=paragraphs,
+            tables=tables,
+            warnings=[],
+        )
+
+
 # ── TXT ───────────────────────────────────────────────────────
 
 class TextExtractor(BaseExtractor):

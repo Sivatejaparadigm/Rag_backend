@@ -81,6 +81,7 @@ async def upload_and_ingest(
 
     return UploadResponse(
         job_id=job.id,
+        tenant_id=tenant_id,
         filename=job.filename,
         status=IngestionStatus.PENDING,
         message="File uploaded. Extraction running in background. Poll /jobs/{job_id} for status.",
@@ -139,6 +140,7 @@ async def upload_batch(
 
         responses.append(UploadResponse(
             job_id=job.id,
+            tenant_id=tenant_id,
             filename=job.filename,
             status=IngestionStatus.PENDING,
             message="Queued for extraction.",
@@ -253,6 +255,7 @@ async def retry_job(
 
     return UploadResponse(
         job_id=job.id,
+        tenant_id=tenant_id,
         filename=job.filename,
         status=IngestionStatus.PROCESSING,
         message="Retry started. Poll /jobs/{job_id} for status.",

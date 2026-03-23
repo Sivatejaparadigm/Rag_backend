@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import Final
 
 from app.pipeline.extractors.base import BaseExtractor
-from app.pipeline.extractors.other_extractors import (
+from app.pipeline.extractors.extractors import (
+    PDFExtractor,
+    DocxExtractor,
     TextExtractor,
     CSVExtractor,
     HTMLExtractor,
@@ -13,8 +15,6 @@ from app.pipeline.extractors.other_extractors import (
     XLSXExtractor,
     RTFExtractor,
 )
-from app.pipeline.extractors.pdf_extractor import PDFExtractor
-from app.pipeline.extractors.docx_extractor import DocxExtractor
 from app.schemas.ingestion import DocumentType
 
 

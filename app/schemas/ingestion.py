@@ -109,6 +109,7 @@ class IngestionJobResponse(_OrmBaseModel):
 
 class UploadResponse(BaseModel):
     job_id: uuid.UUID
+    tenant_id: uuid.UUID 
     filename: str
     status: IngestionStatus
     message: str
