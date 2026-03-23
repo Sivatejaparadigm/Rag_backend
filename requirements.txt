@@ -5,6 +5,12 @@ pypdf
 pydantic
 python-dotenv
 
+# Database
+sqlalchemy[asyncio]
+asyncpg
+alembic
+pydantic-settings
+
 # Future RAG extensions
 langchain
 langchain-community
