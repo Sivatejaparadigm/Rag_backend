@@ -16,3 +16,10 @@ langchain
 langchain-community
 tiktoken
 numpy
+pypdf
+python-docx
+beautifulsoup4
+lxml
+python-pptx
+openpyxl
+striprtf
