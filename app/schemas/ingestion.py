@@ -8,7 +8,11 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
+<<<<<<< HEAD
 # Enums
+=======
+# ── Enums ──────────────────────────────────────────────────────
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
 
 class IngestionStatus(str, Enum):
     PENDING    = "pending"
@@ -43,13 +47,21 @@ class DestinationType(str, Enum):
     POSTGRES = "postgres"
 
 
+<<<<<<< HEAD
 # Base Model
+=======
+# ── Base ───────────────────────────────────────────────────────
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
 
 class _OrmBaseModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+<<<<<<< HEAD
 # Extracted Content
+=======
+# ── Extracted Content ──────────────────────────────────────────
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
 
 class ExtractedContentCreate(_OrmBaseModel):
     tenant_id: uuid.UUID
@@ -59,6 +71,7 @@ class ExtractedContentCreate(_OrmBaseModel):
     warnings: list[Any] | None = None
 
 
+<<<<<<< HEAD
 class ExtractedContentResponse(ExtractedContentCreate):
     id: uuid.UUID
     job_id: uuid.UUID
@@ -66,6 +79,20 @@ class ExtractedContentResponse(ExtractedContentCreate):
 
 
 # Ingestion Job
+=======
+class ExtractedContentResponse(_OrmBaseModel):
+    id: uuid.UUID
+    job_id: uuid.UUID
+    tenant_id: uuid.UUID
+    raw_text: str | None
+    pages: list[Any] | None
+    tables: list[Any] | None
+    warnings: list[Any] | None
+    created_at: datetime
+
+
+# ── Ingestion Job ──────────────────────────────────────────────
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
 
 class IngestionJobCreate(_OrmBaseModel):
     tenant_id: uuid.UUID
@@ -105,11 +132,19 @@ class IngestionJobResponse(_OrmBaseModel):
     content: ExtractedContentResponse | None = None
 
 
+<<<<<<< HEAD
 # API Responses
 
 class UploadResponse(BaseModel):
     job_id: uuid.UUID
     tenant_id: uuid.UUID 
+=======
+# ── API Responses ──────────────────────────────────────────────
+
+class UploadResponse(BaseModel):
+    job_id: uuid.UUID
+    tenant_id: uuid.UUID
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     filename: str
     status: IngestionStatus
     message: str

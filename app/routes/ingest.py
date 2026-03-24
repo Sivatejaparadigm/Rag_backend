@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+<<<<<<< HEAD
 import asyncio
+=======
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+<<<<<<< HEAD
+=======
+from app.core.config import settings
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
 from app.core.database import get_db
 from app.core.storage import ensure_uploads_dir, sanitize_filename
 from app.pipeline.extractors.registry import DEFAULT_REGISTRY
@@ -23,6 +30,33 @@ from app.schemas.ingestion import (
 router = APIRouter()
 
 
+<<<<<<< HEAD
+=======
+# ── File validation helper ────────────────────────────────────
+
+async def validate_file(file: UploadFile) -> bytes:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in settings.ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"File type '{ext}' is not allowed. Allowed: {sorted(settings.ALLOWED_EXTENSIONS)}",
+        )
+
+    contents = await file.read()
+    size_mb = len(contents) / (1024 * 1024)
+    if size_mb > settings.MAX_FILE_SIZE_MB:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum is {settings.MAX_FILE_SIZE_MB}MB. Got {size_mb:.1f}MB",
+        )
+
+    return contents
+
+
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
 # ── Upload single file ────────────────────────────────────────
 
 @router.post("/upload", response_model=UploadResponse)
@@ -30,6 +64,7 @@ async def upload_and_ingest(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     tenant_id: uuid.UUID = Form(...),
+<<<<<<< HEAD
     document_type: DocumentType | None = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -44,6 +79,19 @@ async def upload_and_ingest(
         )
 
     # Create job row immediately — client gets job_id right away
+=======
+    db: AsyncSession = Depends(get_db),
+):
+    contents = await validate_file(file)
+
+    inferred_type = DEFAULT_REGISTRY.detect_document_type(file.filename)
+    if inferred_type == DocumentType.UNKNOWN:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Cannot detect file type for '{file.filename}'",
+        )
+
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     job_repo = JobRepository(db)
     job = await job_repo.create_job(
         filename=file.filename,
@@ -51,6 +99,7 @@ async def upload_and_ingest(
         tenant_id=tenant_id,
     )
 
+<<<<<<< HEAD
     # Save file to disk
     uploads_dir = ensure_uploads_dir()
     tenant_dir = uploads_dir / str(tenant_id)
@@ -60,17 +109,32 @@ async def upload_and_ingest(
 
     try:
         dest.write_bytes(await file.read())
+=======
+    uploads_dir = ensure_uploads_dir()
+    tenant_dir = uploads_dir / str(tenant_id)
+    tenant_dir.mkdir(parents=True, exist_ok=True)
+    dest: Path = tenant_dir / f"{job.id}_{sanitize_filename(file.filename)}"
+
+    try:
+        dest.write_bytes(contents)
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     except Exception as e:
         await job_repo.mark_failed(job_id=job.id, error=f"Failed to save file: {e}", retry_count=0)
         await db.commit()
         raise HTTPException(status_code=500, detail="Failed to save uploaded file") from e
 
+<<<<<<< HEAD
     # Track source
+=======
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     job.source_type = "file_upload"
     job.source_uri = str(dest)
     await db.commit()
 
+<<<<<<< HEAD
     # Run extraction in background — client doesn't wait
+=======
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     background_tasks.add_task(
         _run_ingestion_background,
         job_id=job.id,
@@ -97,25 +161,52 @@ async def upload_batch(
     tenant_id: uuid.UUID = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+<<<<<<< HEAD
     if len(files) > 20:
         raise HTTPException(status_code=400, detail="Maximum 20 files per batch")
 
     responses = []
     for file in files:
         if not file.filename:
+=======
+    if len(files) > settings.MAX_BATCH_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {settings.MAX_BATCH_FILES} files per batch. Got {len(files)}.",
+        )
+
+    job_repo = JobRepository(db)
+    uploads_dir = ensure_uploads_dir()
+    tenant_dir = uploads_dir / str(tenant_id)
+    tenant_dir.mkdir(parents=True, exist_ok=True)
+
+    responses = []
+
+    for file in files:
+        # validate each file — skip invalid ones instead of failing whole batch
+        try:
+            contents = await validate_file(file)
+        except HTTPException:
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
             continue
 
         inferred_type = DEFAULT_REGISTRY.detect_document_type(file.filename)
         if inferred_type == DocumentType.UNKNOWN:
+<<<<<<< HEAD
             continue  # skip unsupported, process rest
 
         job_repo = JobRepository(db)
+=======
+            continue
+
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
         job = await job_repo.create_job(
             filename=file.filename,
             document_type=inferred_type.value,
             tenant_id=tenant_id,
         )
 
+<<<<<<< HEAD
         uploads_dir = ensure_uploads_dir()
         tenant_dir = uploads_dir / str(tenant_id)
         tenant_dir.mkdir(parents=True, exist_ok=True)
@@ -123,6 +214,12 @@ async def upload_batch(
 
         try:
             dest.write_bytes(await file.read())
+=======
+        dest = tenant_dir / f"{job.id}_{sanitize_filename(file.filename)}"
+
+        try:
+            dest.write_bytes(contents)
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
         except Exception as e:
             await job_repo.mark_failed(job_id=job.id, error=str(e), retry_count=0)
             continue
@@ -200,7 +297,10 @@ async def delete_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+<<<<<<< HEAD
     # Delete file from disk if it exists
+=======
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     if job.source_uri:
         file_path = Path(job.source_uri)
         if file_path.exists():
@@ -232,16 +332,26 @@ async def retry_job(
     if job.status != IngestionStatus.FAILED.value:
         raise HTTPException(
             status_code=400,
+<<<<<<< HEAD
             detail=f"Only failed jobs can be retried. Current status: {job.status}"
+=======
+            detail=f"Only failed jobs can be retried. Current status: {job.status}",
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
         )
 
     if not job.source_uri or not Path(job.source_uri).exists():
         raise HTTPException(
             status_code=400,
+<<<<<<< HEAD
             detail="Original file no longer exists on disk. Please re-upload."
         )
 
     # Reset job back to pending
+=======
+            detail="Original file no longer exists on disk. Please re-upload.",
+        )
+
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     await job_repo.mark_processing(job_id)
     await db.commit()
 
@@ -270,9 +380,12 @@ async def _run_ingestion_background(
     tenant_id: uuid.UUID,
     document_type: DocumentType,
 ) -> None:
+<<<<<<< HEAD
     """
     Runs in background — has its own DB session separate from the request.
     """
+=======
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
     from app.core.database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:
@@ -287,4 +400,8 @@ async def _run_ingestion_background(
             )
             await db.commit()
         except Exception:
+<<<<<<< HEAD
             await db.commit()  # mark_failed already called inside ingestion.run
+=======
+            await db.commit()
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3

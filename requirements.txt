@@ -15,4 +15,15 @@ pydantic-settings
 langchain
 langchain-community
 tiktoken
+<<<<<<< HEAD
 numpy
+=======
+numpy
+pypdf
+python-docx
+beautifulsoup4
+lxml
+python-pptx
+openpyxl
+striprtf
+>>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
