@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
-# Enums
+# ── Enums ──────────────────────────────────────────────────────
 
 class IngestionStatus(str, Enum):
     PENDING    = "pending"
@@ -43,13 +43,13 @@ class DestinationType(str, Enum):
     POSTGRES = "postgres"
 
 
-# Base Model
+# ── Base ───────────────────────────────────────────────────────
 
 class _OrmBaseModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Extracted Content
+# ── Extracted Content ──────────────────────────────────────────
 
 class ExtractedContentCreate(_OrmBaseModel):
     tenant_id: uuid.UUID
@@ -59,13 +59,18 @@ class ExtractedContentCreate(_OrmBaseModel):
     warnings: list[Any] | None = None
 
 
-class ExtractedContentResponse(ExtractedContentCreate):
+class ExtractedContentResponse(_OrmBaseModel):
     id: uuid.UUID
     job_id: uuid.UUID
+    tenant_id: uuid.UUID
+    raw_text: str | None
+    pages: list[Any] | None
+    tables: list[Any] | None
+    warnings: list[Any] | None
     created_at: datetime
 
 
-# Ingestion Job
+# ── Ingestion Job ──────────────────────────────────────────────
 
 class IngestionJobCreate(_OrmBaseModel):
     tenant_id: uuid.UUID
@@ -105,11 +110,11 @@ class IngestionJobResponse(_OrmBaseModel):
     content: ExtractedContentResponse | None = None
 
 
-# API Responses
+# ── API Responses ──────────────────────────────────────────────
 
 class UploadResponse(BaseModel):
     job_id: uuid.UUID
-    tenant_id: uuid.UUID 
+    tenant_id: uuid.UUID
     filename: str
     status: IngestionStatus
     message: str

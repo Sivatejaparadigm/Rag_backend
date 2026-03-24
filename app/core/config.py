@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     # ── File Upload ───────────────────────────────────────────
     UPLOAD_DIR: Path = Path("uploads")
     MAX_FILE_SIZE_MB: int = 50
+    MAX_BATCH_FILES: int = 20
+
+    # ── Allowed File Types ────────────────────────────────────
+    ALLOWED_EXTENSIONS: set = {
+        ".pdf", ".docx", ".doc", ".pptx",
+        ".xlsx", ".xls", ".txt", ".html",
+        ".htm", ".md", ".rtf", ".csv",
+    }
 
     def model_post_init(self, __context):
         self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

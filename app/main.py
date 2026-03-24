@@ -42,6 +42,6 @@ from app.routes.ingest import router as ingestion_router
 
 app.include_router(
     ingestion_router,
-    prefix="/api/v1/ingestion",
+    prefix="/ingestion",
     tags=["Ingestion"],
 )

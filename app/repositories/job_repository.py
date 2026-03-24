@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime,timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +47,7 @@ class JobRepository:
     ) -> list[IngestionJob]:
         query = (
             select(IngestionJob)
+            .options(selectinload(IngestionJob.content))
             .order_by(IngestionJob.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -77,7 +78,7 @@ class JobRepository:
             .where(IngestionJob.id == job_id)
             .values(
                 status="processing",
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             )
         )
 
@@ -94,8 +95,8 @@ class JobRepository:
                 status="completed",
                 word_count=word_count,
                 page_count=page_count,
-                updated_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
             )
         )
 
@@ -112,7 +113,7 @@ class JobRepository:
                 status="failed",
                 error_message=error,
                 retry_count=retry_count,
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             )
         )
 
@@ -127,7 +128,7 @@ class JobRepository:
             .values(
                 status="retrying",
                 retry_count=retry_count,
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             )
         )
 
