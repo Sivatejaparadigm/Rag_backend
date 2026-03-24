@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import uuid
+from sqlalchemy import select, delete, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.chunk import Chunk
+from app.schemas.chunking_schemas import ChunkCreate
+
+
+class ChunkRepository:
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    # ── Create ────────────────────────────────────────────────────────────────
+
+    async def create(self, data: ChunkCreate) -> Chunk:
+        """Create a single chunk."""
+        record = Chunk(
+            tenant_id=data.tenant_id,
+            job_id=data.job_id,
+            source_id=data.source_id,
+            chunk_text=data.chunk_text,
+            chunk_index=data.chunk_index,
+            token_count=data.token_count,
+            page_number=data.page_number,
+            section_title=data.section_title,
+            heading_level=data.heading_level,
+            language=data.language,
+            lang_confidence=data.lang_confidence,
+            chunk_strategy=data.chunk_strategy,
+            parent_chunk_id=data.parent_chunk_id,
+            topic=data.topic,
+            doc_type=data.doc_type,
+            entities=data.entities,
+            keywords=data.keywords,
+        )
+        self.db.add(record)
+        await self.db.flush()
+        return record
+
+    async def create_many(self, items: list[ChunkCreate]) -> list[Chunk]:
+        """Bulk insert chunks."""
+        records = [
+            Chunk(
+                tenant_id=d.tenant_id,
+                job_id=d.job_id,
+                source_id=d.source_id,
+                chunk_text=d.chunk_text,
+                chunk_index=d.chunk_index,
+                token_count=d.token_count,
+                page_number=d.page_number,
+                section_title=d.section_title,
+                heading_level=d.heading_level,
+                language=d.language,
+                lang_confidence=d.lang_confidence,
+                chunk_strategy=d.chunk_strategy,
+                parent_chunk_id=d.parent_chunk_id,
+                topic=d.topic,
+                doc_type=d.doc_type,
+                entities=d.entities,
+                keywords=d.keywords,
+            )
+            for d in items
+        ]
+        self.db.add_all(records)
+        await self.db.flush()
+        return records
+
+    # ── Read ──────────────────────────────────────────────────────────────────
+
+    async def get_by_id(
+        self,
+        chunk_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
+    ) -> Chunk | None:
+        query = select(Chunk).where(Chunk.id == chunk_id)
+        if tenant_id is not None:
+            query = query.where(Chunk.tenant_id == tenant_id)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_by_job_id(
+        self,
+        job_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Chunk]:
+        """Get all chunks for a job."""
+        query = select(Chunk).where(Chunk.job_id == job_id)
+        if tenant_id is not None:
+            query = query.where(Chunk.tenant_id == tenant_id)
+        query = query.order_by(Chunk.chunk_index).limit(limit).offset(offset)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def count_by_job(self, job_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> int:
+        """Count chunks for a job."""
+        query = select(func.count()).select_from(Chunk).where(Chunk.job_id == job_id)
+        if tenant_id is not None:
+            query = query.where(Chunk.tenant_id == tenant_id)
+        result = await self.db.execute(query)
+        return result.scalar_one() or 0
+
+    async def delete_by_job_id(self, job_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> int:
+        """Delete all chunks for a job."""
+        query = delete(Chunk).where(Chunk.job_id == job_id)
+        if tenant_id is not None:
+            query = query.where(Chunk.tenant_id == tenant_id)
+        result = await self.db.execute(query)
+        await self.db.flush()
+        return result.rowcount or 0

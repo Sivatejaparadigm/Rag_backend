@@ -47,8 +47,12 @@ class PreprocessedDataCreate(_OrmBaseModel):
     source_uri:    str | None = None
 
     # ── Text payload ──────────────────────────────────────────────────────────
-    raw_text:          str | None = None   # before any preprocessing step
     preprocessed_text: str | None = None   # after full pipeline — feeds Chunker
+    preprocessed_pages: list[Any] | None = None  # list of preprocessed page objects
+
+    # ── Language detection ────────────────────────────────────────────────────
+    language:       str = "UNKNOWN"   # detected language code
+    lang_confidence: float = Field(default=0.0, ge=0.0, le=1.0)   # confidence score
 
     # ── Pipeline outcome ──────────────────────────────────────────────────────
     status:        PreprocessStatus = PreprocessStatus.COMPLETED
@@ -64,6 +68,9 @@ class PreprocessedDataUpdate(_OrmBaseModel):
     All fields optional — only set what changed.
     """
     preprocessed_text: str | None = None
+    preprocessed_pages: list[Any] | None = None
+    language:          str | None = None
+    lang_confidence:   float | None = None
     status:            PreprocessStatus | None = None
     error_message:     str | None = None
 
@@ -89,8 +96,12 @@ class PreprocessedDataResponse(_OrmBaseModel):
     source_uri:    str | None
 
     # ── Text ──────────────────────────────────────────────────────────────────
-    raw_text:          str | None
     preprocessed_text: str | None
+    preprocessed_pages: list[Any] | None
+
+    # ── Language detection ────────────────────────────────────────────────────
+    language:        str
+    lang_confidence: float
 
     # ── Outcome ───────────────────────────────────────────────────────────────
     status:        PreprocessStatus
@@ -119,6 +130,7 @@ class PreprocessingResult(BaseModel):
         }
     """
     preprocessed_text: str
+    preprocessed_pages: list[Any] | None = None
     language:          str = "UNKNOWN"
     lang_confidence:   float = Field(default=0.0, ge=0.0, le=1.0)
     word_count:        int = 0
@@ -140,10 +152,8 @@ class PreprocessResponse(BaseModel):
     filename:   str | None
     status:     PreprocessStatus
     message:    str
-    # Include both raw extracted text and the cleaned output so the client
-    # can verify preprocessing quality without additional GET calls.
-    raw_text:           str | None = None
     preprocessed_text:  str | None = None
+    preprocessed_pages: list[Any] | None = None
 
 
 class PreprocessListResponse(BaseModel):

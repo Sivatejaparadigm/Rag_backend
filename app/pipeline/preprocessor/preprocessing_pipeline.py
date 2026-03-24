@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import unicodedata
 import logging
-from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +35,8 @@ class PreprocessingPipeline:
             → NormalisationStep      unicodedata.normalize('NFKC') + control char strip
             → WhitespaceStep         zero-width chars, multi-space, multi-newline
             → QualityFilterStep      junk / noise filter (min words, symbol ratio)
-            → LanguageDetectionStep  fastText lid.176.bin → lingua fallback
-            → DeduplicationStep      BLAKE3 exact hash → MinHash LSH near-dup
+            → LanguageDetectionStep  lingua-py language detection
+            → DeduplicationStep      SHA-256 exact hash → MinHash LSH near-dup
             → preprocessed_text      ready for Chunking Engine
 
     Usage:
@@ -49,12 +47,12 @@ class PreprocessingPipeline:
     def __init__(
         self,
         job_repo: JobRepository,
-        db: AsyncSession,
-        steps: list[BasePreprocessor] | None = None,
+        db:       AsyncSession,
+        steps:    list[BasePreprocessor] | None = None,
     ) -> None:
-        self.job_repo           = job_repo
-        self.db                 = db
-        self.preprocessed_repo  = PreprocessedDataRepository(db)
+        self.job_repo          = job_repo
+        self.db                = db
+        self.preprocessed_repo = PreprocessedDataRepository(db)
 
         # Default step order — can be overridden for testing or custom tenants
         self.steps: list[BasePreprocessor] = steps or [
@@ -68,25 +66,121 @@ class PreprocessingPipeline:
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
-    def _apply_steps(self, text: str) -> PreprocessingResult:
+    def _apply_steps(self, pages: list[dict]) -> PreprocessingResult:
         """
-        Run each step in order.
-        Any step may raise StopPreprocessing to short-circuit the pipeline
-        (e.g. QualityFilterStep on junk, DeduplicationStep on duplicate).
+        Two-phase preprocessing:
+
+        Phase 1 — per-page cleaning (Encoding, Normalisation, Whitespace,
+                   QualityFilter, LanguageDetection).
+                   A page that fails QualityFilter is skipped — not the whole doc.
+
+        Phase 2 — document-level deduplication.
+                   Runs ONCE on the combined text of all cleaned pages.
+                   Compares the whole document against other whole documents.
         """
-        current = text
 
-        for step in self.steps:
-            result = step.process(current)
+        # ── Phase 1: per-page cleaning steps ─────────────────────────────────
+        # DeduplicationStep is excluded here — it runs in Phase 2.
+        cleaning_steps = [
+            step for step in self.steps
+            if not isinstance(step, DeduplicationStep)
+        ]
 
-            if not result.passed:
-                # Step signalled rejection or duplication — stop here
-                return result
+        preprocessed_pages = []
+        metadata = {
+            "language":        "UNKNOWN",
+            "lang_confidence": 0.0,
+            "is_duplicate":    False,
+        }
 
-            current = result.preprocessed_text
+        for page in pages:
+            current       = page["text"]
+            page_metadata = metadata.copy()
+
+            for step in cleaning_steps:
+                result = step.process(current)
+
+                if not result.passed:
+                    # QualityFilterStep rejected this page — skip the page only,
+                    # not the whole document.
+                    logger.debug(
+                        "_apply_steps: page %s rejected by %s — skipping page",
+                        page.get("page_number", "?"),
+                        step.__class__.__name__,
+                    )
+                    current = None
+                    break
+
+                # Carry language metadata forward from LanguageDetectionStep
+                if getattr(result, "language", "UNKNOWN") != "UNKNOWN":
+                    page_metadata["language"]       = result.language
+                    page_metadata["lang_confidence"] = result.lang_confidence
+
+                current = result.preprocessed_text
+
+            # Page was rejected by a cleaning step — do not include it
+            if current is None:
+                continue
+
+            preprocessed_pages.append({
+                **page,
+                "text":            current,
+                "language":        page_metadata["language"],
+                "lang_confidence": page_metadata["lang_confidence"],
+            })
+
+            # Keep the highest-confidence language detection across all pages
+            if page_metadata["lang_confidence"] > metadata["lang_confidence"]:
+                metadata["language"]       = page_metadata["language"]
+                metadata["lang_confidence"] = page_metadata["lang_confidence"]
+
+        # If every page was rejected by QualityFilter, stop here
+        if not preprocessed_pages:
+            logger.warning("_apply_steps: all pages rejected by quality filter")
+            return PreprocessingResult(
+                preprocessed_text="",
+                preprocessed_pages=[],
+                language=metadata["language"],
+                lang_confidence=metadata["lang_confidence"],
+                is_duplicate=False,
+                passed=False,
+            )
+
+        # ── Phase 2: document-level deduplication ─────────────────────────────
+        # Runs ONCE on the full combined text of all cleaned pages.
+        # MinHash is computed on the whole document — not per page.
+        dedup_step = next(
+            (step for step in self.steps if isinstance(step, DeduplicationStep)),
+            None,
+        )
+
+        if dedup_step is not None:
+            combined_text = "\n\n".join(p["text"] for p in preprocessed_pages)
+            dedup_result  = dedup_step.process(combined_text)
+
+            if not dedup_result.passed:
+                logger.info(
+                    "_apply_steps: document rejected as duplicate (is_duplicate=%s)",
+                    dedup_result.is_duplicate,
+                )
+                return PreprocessingResult(
+                    preprocessed_text="",
+                    preprocessed_pages=[],
+                    language=metadata["language"],
+                    lang_confidence=metadata["lang_confidence"],
+                    is_duplicate=True,
+                    passed=False,
+                )
+
+        # ── All steps passed — return cleaned pages ───────────────────────────
+        combined_text = "\n\n".join(p["text"] for p in preprocessed_pages)
 
         return PreprocessingResult(
-            preprocessed_text=current,
+            preprocessed_text=combined_text,
+            preprocessed_pages=preprocessed_pages,
+            language=metadata["language"],
+            lang_confidence=metadata["lang_confidence"],
+            is_duplicate=False,
             passed=True,
         )
 
@@ -108,6 +202,7 @@ class PreprocessingPipeline:
                 "message":  str,
             }
         """
+
         # ── 1. Load source job + extracted content ────────────────────────────
         job = await self.job_repo.get_job(job_id=job_id, tenant_id=tenant_id)
         if not job:
@@ -116,15 +211,15 @@ class PreprocessingPipeline:
         if not job.content:
             raise ValueError(f"No ExtractedContent for job_id={job_id}")
 
-        content   = job.content
-        raw_text  = content.raw_text or ""
+        content = job.content
+        pages   = content.pages or []
 
         # ── 2. Check if a preprocessed record already exists ──────────────────
         existing = await self.preprocessed_repo.get_by_job_id(job_id=job_id)
 
         # ── 3. Run pipeline steps ─────────────────────────────────────────────
         try:
-            result = self._apply_steps(raw_text)
+            result = self._apply_steps(pages)
         except Exception as exc:
             logger.exception("Preprocessing pipeline error for job_id=%s", job_id)
             error_msg = str(exc)
@@ -144,7 +239,6 @@ class PreprocessingPipeline:
                         document_type=job.document_type,
                         source_type=job.source_type,
                         source_uri=job.source_uri,
-                        raw_text=raw_text,
                         preprocessed_text=None,
                         status=PreprocessStatus.FAILED,
                         error_message=error_msg,
@@ -160,7 +254,6 @@ class PreprocessingPipeline:
 
         # ── 4. Map result → status ────────────────────────────────────────────
         if not result.passed:
-            # Determine whether rejection or duplicate
             status = (
                 PreprocessStatus.SKIPPED_DUP
                 if getattr(result, "is_duplicate", False)
@@ -175,6 +268,9 @@ class PreprocessingPipeline:
                 record_id=existing.id,
                 data=PreprocessedDataUpdate(
                     preprocessed_text=result.preprocessed_text,
+                    preprocessed_pages=result.preprocessed_pages,
+                    language=result.language,
+                    lang_confidence=result.lang_confidence,
                     status=status,
                     error_message=None,
                 ),
@@ -190,8 +286,10 @@ class PreprocessingPipeline:
                     document_type=job.document_type,
                     source_type=job.source_type,
                     source_uri=job.source_uri,
-                    raw_text=raw_text,
                     preprocessed_text=result.preprocessed_text,
+                    preprocessed_pages=result.preprocessed_pages,
+                    language=result.language,
+                    lang_confidence=result.lang_confidence,
                     status=status,
                     error_message=None,
                 )

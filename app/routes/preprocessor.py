@@ -55,8 +55,8 @@ async def run_preprocess(
         filename=record.filename,
         status=status,
         message=message,
-        raw_text=record.raw_text,
         preprocessed_text=record.preprocessed_text,
+        preprocessed_pages=record.preprocessed_pages,
     )
 
 

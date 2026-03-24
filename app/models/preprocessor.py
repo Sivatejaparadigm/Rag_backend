@@ -4,7 +4,7 @@ from sqlalchemy import (
     String, Text, DateTime,
     ForeignKey, Enum
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 import enum
@@ -119,19 +119,30 @@ class PreprocessedData(Base):
 
     # ── Text payload ──────────────────────────────────────────────────────────
 
-    raw_text: Mapped[str] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Unmodified text from the Document Parser "
-                "(Docling / unstructured.io). "
-                "Mirrors extracted_contents.raw_text.",
-    )
-
     preprocessed_text: Mapped[str] = mapped_column(
         Text,
         nullable=True,
         comment="Clean text after the full preprocessing pipeline. "
                 "This field feeds the Chunking Engine.",
+    )
+
+    preprocessed_pages: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="List of preprocessed page objects, each containing page_number, text, word_count, etc.",
+    )
+
+    # ── Language detection ────────────────────────────────────────────────────
+
+    language: Mapped[str] = mapped_column(
+        String(20),
+        default="UNKNOWN",
+        comment="Detected language (e.g. 'ENGLISH', 'SPANISH', 'UNKNOWN')",
+    )
+
+    lang_confidence: Mapped[float] = mapped_column(
+        comment="Language detection confidence score (0.0-1.0)",
+        default=0.0,
     )
 
     # ── Pipeline outcome ──────────────────────────────────────────────────────

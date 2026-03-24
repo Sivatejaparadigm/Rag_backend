@@ -30,8 +30,10 @@ class PreprocessedDataRepository:
             document_type=data.document_type,
             source_type=data.source_type,
             source_uri=data.source_uri,
-            raw_text=data.raw_text,
             preprocessed_text=data.preprocessed_text,
+            preprocessed_pages=data.preprocessed_pages,
+            language=data.language,
+            lang_confidence=data.lang_confidence,
             status=data.status,
             error_message=data.error_message,
         )
@@ -63,6 +65,18 @@ class PreprocessedDataRepository:
             query = query.where(PreprocessedData.tenant_id == tenant_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
+
+    async def list_by_job_id(
+        self,
+        job_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
+    ) -> list[PreprocessedData]:
+        """Return all preprocessed records for a given ingestion job."""
+        query = select(PreprocessedData).where(PreprocessedData.job_id == job_id)
+        if tenant_id is not None:
+            query = query.where(PreprocessedData.tenant_id == tenant_id)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 
     async def get_by_content_id(
         self,
@@ -125,6 +139,12 @@ class PreprocessedDataRepository:
 
         if data.preprocessed_text is not None:
             values["preprocessed_text"] = data.preprocessed_text
+        if data.preprocessed_pages is not None:
+            values["preprocessed_pages"] = data.preprocessed_pages
+        if data.language is not None:
+            values["language"] = data.language
+        if data.lang_confidence is not None:
+            values["lang_confidence"] = data.lang_confidence
         if data.status is not None:
             values["status"] = data.status
         if data.error_message is not None:

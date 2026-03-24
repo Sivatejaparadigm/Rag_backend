@@ -41,6 +41,7 @@ class IngestionJob(Base):
     completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
  
     content: Mapped["ExtractedContent"] = relationship(back_populates="job", uselist=False)
+    chunks: Mapped[list["Chunk"]] = relationship(back_populates="job", cascade="all, delete-orphan")
  
  
 class ExtractedContent(Base):

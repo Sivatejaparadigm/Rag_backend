@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     # ── Database ──────────────────────────────────────────────
     DATABASE_URL: str
+    GOOGLE_API_KEY: str
     SQL_ECHO: bool = False
 
     # ── App ───────────────────────────────────────────────────
