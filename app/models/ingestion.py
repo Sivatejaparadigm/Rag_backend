@@ -14,7 +14,7 @@ class IngestionJob(Base):
     __tablename__ = "ingestion_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-
+    chunks = relationship("Chunk", back_populates="job")
     # Multi-tenancy
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 

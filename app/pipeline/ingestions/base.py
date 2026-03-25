@@ -62,10 +62,37 @@ class BaseIngestion(ABC):
 
         try:
             extracted = await self.extract(file_path=file_path, tenant_id=tenant_id, document_type=document_type)
-            preprocessed_text = await self.preprocess(extracted)
-            chunks = await self.chunk(preprocessed_text)
-            await self.persist(job_id=job_id, tenant_id=tenant_id, extracted=extracted, chunks=chunks)
+            # 1) Persist raw extracted content first — preprocessing loads from
+            #    `extracted_contents` (via the job.content relationship).
+            await self.persist(
+                job_id=job_id,
+                tenant_id=tenant_id,
+                extracted=extracted,
+                chunks=[],
+            )
 
+            # 2) Run full preprocessing pipeline and persist into `preprocessed_data`.
+            from app.pipeline.preprocessor.preprocessing_pipeline import PreprocessingPipeline
+
+            pipeline = PreprocessingPipeline(job_repo=self.job_repo, db=self.job_repo.db)
+            preprocessing_result = await pipeline.run(job_id=job_id, tenant_id=tenant_id)
+
+            # 3) Use preprocessed text for job stats + (future) chunking.
+            status = preprocessing_result.get("status")
+            record = preprocessing_result.get("record")
+            if getattr(status, "value", None) == "failed":
+                await self.job_repo.mark_failed(
+                    job_id=job_id,
+                    error=preprocessing_result.get("message") or "Preprocessing failed",
+                    retry_count=0,
+                )
+                return
+
+            preprocessed_text = ""
+            if getattr(status, "value", None) == "completed" and record and record.preprocessed_text:
+                preprocessed_text = record.preprocessed_text
+
+            chunks = await self.chunk(preprocessed_text)
             word_count = len(preprocessed_text.split()) if preprocessed_text.strip() else 0
             page_count = len(extracted.pages or [])
             await self.job_repo.mark_completed(job_id=job_id, word_count=word_count, page_count=page_count)

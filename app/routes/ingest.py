@@ -89,6 +89,7 @@ async def upload_and_ingest(
     job.source_uri = str(dest)
     await db.commit()
 
+    # Run extraction in background — client doesn't wait
     background_tasks.add_task(
         _run_ingestion_background,
         job_id=job.id,
@@ -227,6 +228,7 @@ async def delete_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Delete file from disk if it exists
     if job.source_uri:
         file_path = Path(job.source_uri)
         if file_path.exists():
@@ -295,6 +297,9 @@ async def _run_ingestion_background(
     tenant_id: uuid.UUID,
     document_type: DocumentType,
 ) -> None:
+    """
+    Runs in background — has its own DB session separate from the request.
+    """
     from app.core.database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:

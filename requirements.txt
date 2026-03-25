@@ -10,23 +10,21 @@ python-dotenv==1.2.2
 sqlalchemy[asyncio]==2.0.48
 asyncpg
 alembic
- 
 # LangChain Core & Chunking
 langchain==1.2.13
 langchain-core==1.2.20
 langchain-community==0.4.1
 langchain-text-splitters==1.1.1
 langchain-experimental==0.4.1
- 
 # LLM Providers (for Agentic Chunker)
 langchain-google-genai==4.2.1
 langchain-openai==1.1.11
 langchain-anthropic
- 
+
 # Embeddings (for Semantic Chunker)
 sentence-transformers==5.2.3
 HuggingFace
- 
+
 # Document Processing / RAG Extractors
 tiktoken==0.12.0
 numpy==1.26.4

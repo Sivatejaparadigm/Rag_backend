@@ -49,6 +49,27 @@ class _OrmBaseModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Extracted Content
+
+class ExtractedContentCreate(_OrmBaseModel):
+    tenant_id: uuid.UUID
+    raw_text: str | None = None
+    pages: list[Any] | None = None
+    tables: list[Any] | None = None
+    warnings: list[Any] | None = None
+
+
+class ExtractedContentResponse(_OrmBaseModel):
+    id: uuid.UUID
+    job_id: uuid.UUID
+    tenant_id: uuid.UUID
+    raw_text: str | None
+    pages: list[Any] | None
+    tables: list[Any] | None
+    warnings: list[Any] | None
+    created_at: datetime
+
+
 # ── Ingestion Job ──────────────────────────────────────────────
 
 class IngestionJobCreate(_OrmBaseModel):
