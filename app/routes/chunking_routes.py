@@ -18,7 +18,7 @@ router = APIRouter()
 
 async def _run_chunking_in_background(
     job_id: uuid.UUID,
-    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
     strategy: ChunkStrategy,
     config,
 ):
@@ -32,7 +32,7 @@ async def _run_chunking_in_background(
                 strategy=strategy,
                 config=config,
             )
-            result = await pipeline.run(job_id=job_id, tenant_id=tenant_id)
+            result = await pipeline.run(job_id=job_id, session_id=session_id)
             logger.info(
                 "Background chunking completed: job_id=%s strategy=%s result=%s",
                 job_id, strategy.value, result,
@@ -60,12 +60,12 @@ async def create_chunks(
     job_repo = JobRepository(db)
     preprocess_repo = PreprocessedDataRepository(db)
 
-    job = await job_repo.get_job(job_id=req.job_id, tenant_id=req.tenant_id)
+    job = await job_repo.get_job(job_id=req.job_id, session_id=req.session_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job not found: {req.job_id}")
 
     preprocessed_records = await preprocess_repo.list_by_job_id(
-        job_id=req.job_id, tenant_id=req.tenant_id,
+        job_id=req.job_id, session_id=req.session_id,
     )
     if not preprocessed_records:
         raise HTTPException(
@@ -94,14 +94,14 @@ async def create_chunks(
     background_tasks.add_task(
         _run_chunking_in_background,
         job_id=req.job_id,
-        tenant_id=req.tenant_id,
+        session_id=req.session_id,
         strategy=req.strategy,
         config=config,
     )
 
     return ChunkingResponse(
         job_id=req.job_id,
-        tenant_id=req.tenant_id,
+        session_id=req.session_id,
         chunk_strategy=req.strategy.value,
         config=config_dict,
         status=ChunkStatus.PENDING,
@@ -112,7 +112,7 @@ async def create_chunks(
 @router.get("/job/{job_id}")
 async def get_job_chunks(
     job_id: uuid.UUID,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -122,16 +122,16 @@ async def get_job_chunks(
     
     chunks = await chunk_repo.get_by_job_id(
         job_id=job_id,
-        tenant_id=tenant_id,
+        session_id=session_id,
         limit=limit,
         offset=offset,
     )
     
-    total = await chunk_repo.count_by_job(job_id=job_id, tenant_id=tenant_id)
+    total = await chunk_repo.count_by_job(job_id=job_id, session_id=session_id)
     
     return {
         "job_id": job_id,
-        "tenant_id": tenant_id,
+        "session_id": session_id,
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -152,37 +152,37 @@ async def get_job_chunks(
 @router.delete("/{chunk_id}")
 async def delete_chunk_by_id(
     chunk_id: uuid.UUID,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a single chunk by its chunk ID and tenant ID."""
     chunk_repo = ChunkRepository(db)
-    deleted = await chunk_repo.delete_by_id(chunk_id=chunk_id, tenant_id=tenant_id)
+    deleted = await chunk_repo.delete_by_id(chunk_id=chunk_id, session_id=session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Chunk not found: {chunk_id}")
     await db.commit()
     return {
         "message": f"Chunk {chunk_id} deleted successfully",
         "chunk_id": chunk_id,
-        "tenant_id": tenant_id,
+        "session_id": session_id,
     }
 
 
 @router.delete("/job/{job_id}")
 async def delete_chunks_by_job(
     job_id: uuid.UUID,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete all chunks for a job by job ID and tenant ID."""
     chunk_repo = ChunkRepository(db)
-    deleted_count = await chunk_repo.delete_by_job_id(job_id=job_id, tenant_id=tenant_id)
+    deleted_count = await chunk_repo.delete_by_job_id(job_id=job_id, session_id=session_id)
     if deleted_count == 0:
         raise HTTPException(status_code=404, detail=f"No chunks found for job: {job_id}")
     await db.commit()
     return {
         "message": f"Deleted {deleted_count} chunks for job {job_id}",
         "job_id": job_id,
-        "tenant_id": tenant_id,
+        "session_id": session_id,
         "deleted_count": deleted_count,
     }

@@ -18,7 +18,7 @@ class ChunkRepository:
     async def create(self, data: ChunkCreate) -> Chunk:
         """Create a single chunk."""
         kwargs = dict(
-            tenant_id=data.tenant_id,
+            session_id=data.session_id,
             job_id=data.job_id,
             source_id=data.source_id,
             chunk_text=data.chunk_text,
@@ -48,7 +48,7 @@ class ChunkRepository:
         records = []
         for d in items:
             kwargs = dict(
-                tenant_id=d.tenant_id,
+                session_id=d.session_id,
                 job_id=d.job_id,
                 source_id=d.source_id,
                 chunk_text=d.chunk_text,
@@ -78,58 +78,58 @@ class ChunkRepository:
     async def get_by_id(
         self,
         chunk_id: uuid.UUID,
-        tenant_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> Chunk | None:
         query = select(Chunk).where(Chunk.id == chunk_id)
-        if tenant_id is not None:
-            query = query.where(Chunk.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(Chunk.session_id == session_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_by_job_id(
         self,
         job_id: uuid.UUID,
-        tenant_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Chunk]:
         """Get all chunks for a job."""
         query = select(Chunk).where(Chunk.job_id == job_id)
-        if tenant_id is not None:
-            query = query.where(Chunk.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(Chunk.session_id == session_id)
         query = query.order_by(Chunk.chunk_index).limit(limit).offset(offset)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def count_by_job(self, job_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> int:
+    async def count_by_job(self, job_id: uuid.UUID, session_id: uuid.UUID | None = None) -> int:
         """Count chunks for a job."""
         query = select(func.count()).select_from(Chunk).where(Chunk.job_id == job_id)
-        if tenant_id is not None:
-            query = query.where(Chunk.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(Chunk.session_id == session_id)
         result = await self.db.execute(query)
         return result.scalar_one() or 0
 
-    async def delete_by_job_id(self, job_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> int:
+    async def delete_by_job_id(self, job_id: uuid.UUID, session_id: uuid.UUID | None = None) -> int:
         """Delete all chunks for a job."""
         query = delete(Chunk).where(Chunk.job_id == job_id)
-        if tenant_id is not None:
-            query = query.where(Chunk.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(Chunk.session_id == session_id)
         result = await self.db.execute(query)
         await self.db.flush()
         return result.rowcount or 0
 
-    async def delete_by_document_id(self, document_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> int:
+    async def delete_by_document_id(self, document_id: uuid.UUID, session_id: uuid.UUID | None = None) -> int:
         """Delete all chunks for a specific document (source_id)."""
         query = delete(Chunk).where(Chunk.source_id == document_id)
-        if tenant_id is not None:
-            query = query.where(Chunk.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(Chunk.session_id == session_id)
         result = await self.db.execute(query)
         await self.db.flush()
         return result.rowcount or 0
 
-    async def delete_by_id(self, chunk_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> bool:
+    async def delete_by_id(self, chunk_id: uuid.UUID, session_id: uuid.UUID | None = None) -> bool:
         """Delete a single chunk by its ID."""
-        chunk = await self.get_by_id(chunk_id=chunk_id, tenant_id=tenant_id)
+        chunk = await self.get_by_id(chunk_id=chunk_id, session_id=session_id)
         if not chunk:
             return False
         await self.db.delete(chunk)

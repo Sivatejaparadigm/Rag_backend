@@ -14,7 +14,7 @@ from app.schemas.ingestion import DocumentType, ExtractedContentCreate
 class PDFExtractor(BaseExtractor):
     supported_type = DocumentType.PDF
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             from pypdf import PdfReader
         except ImportError:
@@ -43,7 +43,7 @@ class PDFExtractor(BaseExtractor):
         raw_text = self._truncate("\n\n".join(filter(None, all_text)))
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=raw_text,
             pages=pages,
             tables=[],
@@ -56,7 +56,7 @@ class PDFExtractor(BaseExtractor):
 class DocxExtractor(BaseExtractor):
     supported_type = DocumentType.DOCX
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             from docx import Document
         except ImportError:
@@ -102,7 +102,7 @@ class DocxExtractor(BaseExtractor):
         raw_text = self._truncate("\n\n".join(all_text))
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=raw_text,
             pages=paragraphs,
             tables=tables,
@@ -115,7 +115,7 @@ class DocxExtractor(BaseExtractor):
 class TextExtractor(BaseExtractor):
     supported_type = DocumentType.TXT
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             self._ensure_file_exists(file_path)
             text = self._truncate(file_path.read_bytes().decode("utf-8", errors="ignore"))
@@ -123,7 +123,7 @@ class TextExtractor(BaseExtractor):
             raise ExtractionError("Failed to read text file", original=e) from e
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=text,
             pages=[{"page_number": 1, "text": text, "word_count": self._word_count(text)}],
             tables=[],
@@ -136,7 +136,7 @@ class TextExtractor(BaseExtractor):
 class CSVExtractor(BaseExtractor):
     supported_type = DocumentType.CSV
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             self._ensure_file_exists(file_path)
             text = file_path.read_bytes().decode("utf-8", errors="ignore")
@@ -149,7 +149,7 @@ class CSVExtractor(BaseExtractor):
         raw_text = self._truncate("\n".join("\t".join(r) for r in rows))
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=raw_text,
             pages=[{"page_number": 1, "text": raw_text, "word_count": self._word_count(raw_text)}],
             tables=[{"headers": headers, "rows": data_rows}],
@@ -162,7 +162,7 @@ class CSVExtractor(BaseExtractor):
 class HTMLExtractor(BaseExtractor):
     supported_type = DocumentType.HTML
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             from bs4 import BeautifulSoup
         except ImportError:
@@ -188,7 +188,7 @@ class HTMLExtractor(BaseExtractor):
             raise ExtractionError("Failed to read HTML file", original=e) from e
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=raw_text,
             pages=[{"page_number": 1, "text": raw_text, "word_count": self._word_count(raw_text)}],
             tables=tables,
@@ -201,7 +201,7 @@ class HTMLExtractor(BaseExtractor):
 class MarkdownExtractor(BaseExtractor):
     supported_type = DocumentType.MD
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             self._ensure_file_exists(file_path)
             text = file_path.read_text(encoding="utf-8", errors="ignore")
@@ -214,7 +214,7 @@ class MarkdownExtractor(BaseExtractor):
             raise ExtractionError("Failed to read Markdown file", original=e) from e
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=plain,
             pages=[{"page_number": 1, "text": plain, "word_count": self._word_count(plain)}],
             tables=[],
@@ -227,7 +227,7 @@ class MarkdownExtractor(BaseExtractor):
 class PPTXExtractor(BaseExtractor):
     supported_type = DocumentType.PPTX
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             from pptx import Presentation
         except ImportError:
@@ -256,7 +256,7 @@ class PPTXExtractor(BaseExtractor):
             raise ExtractionError("Failed to read PPTX file", original=e) from e
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=self._truncate("\n\n".join(filter(None, all_text))),
             pages=slides,
             tables=[],
@@ -269,7 +269,7 @@ class PPTXExtractor(BaseExtractor):
 class XLSXExtractor(BaseExtractor):
     supported_type = DocumentType.XLSX
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             import openpyxl
         except ImportError:
@@ -309,7 +309,7 @@ class XLSXExtractor(BaseExtractor):
             raise ExtractionError("Failed to read XLSX file", original=e) from e
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=self._truncate("\n\n".join(all_text)),
             pages=sheets,
             tables=tables,
@@ -322,7 +322,7 @@ class XLSXExtractor(BaseExtractor):
 class RTFExtractor(BaseExtractor):
     supported_type = DocumentType.RTF
 
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         try:
             from striprtf.striprtf import rtf_to_text
         except ImportError:
@@ -341,7 +341,7 @@ class RTFExtractor(BaseExtractor):
             raise ExtractionError("Failed to read RTF file", original=e) from e
 
         return ExtractedContentCreate(
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=raw_text,
             pages=[{"page_number": 1, "text": raw_text, "word_count": self._word_count(raw_text)}],
             tables=[],

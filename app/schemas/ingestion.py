@@ -52,7 +52,7 @@ class _OrmBaseModel(BaseModel):
 # Extracted Content
 
 class ExtractedContentCreate(_OrmBaseModel):
-    tenant_id: uuid.UUID
+    session_id: uuid.UUID
     raw_text: str | None = None
     pages: list[Any] | None = None
     tables: list[Any] | None = None
@@ -62,7 +62,7 @@ class ExtractedContentCreate(_OrmBaseModel):
 class ExtractedContentResponse(_OrmBaseModel):
     id: uuid.UUID
     job_id: uuid.UUID
-    tenant_id: uuid.UUID
+    session_id: uuid.UUID
     raw_text: str | None
     pages: list[Any] | None
     tables: list[Any] | None
@@ -73,7 +73,7 @@ class ExtractedContentResponse(_OrmBaseModel):
 # ── Ingestion Job ──────────────────────────────────────────────
 
 class IngestionJobCreate(_OrmBaseModel):
-    tenant_id: uuid.UUID
+    session_id: uuid.UUID
     filename: str
     document_type: DocumentType | None = None
     source_type: SourceType | None = None
@@ -94,7 +94,7 @@ class IngestionJobStatusUpdate(_OrmBaseModel):
 
 class IngestionJobSummary(_OrmBaseModel):
     job_id: uuid.UUID = None
-    tenant_id: uuid.UUID
+    session_id: uuid.UUID
     filename: str
     status: IngestionStatus
     word_count: int | None
@@ -107,7 +107,7 @@ class IngestionJobSummary(_OrmBaseModel):
     def from_orm_job(cls, job) -> IngestionJobSummary:
         return cls(
             job_id=job.id,
-            tenant_id=job.tenant_id,
+            session_id=job.session_id,
             filename=job.filename,
             status=job.status,
             word_count=job.word_count,
@@ -120,7 +120,7 @@ class IngestionJobSummary(_OrmBaseModel):
 
 class IngestionJobResponse(_OrmBaseModel):
     job_id: uuid.UUID = None
-    tenant_id: uuid.UUID
+    session_id: uuid.UUID
     filename: str
     document_type: DocumentType | None
     status: IngestionStatus
@@ -137,7 +137,7 @@ class IngestionJobResponse(_OrmBaseModel):
     def from_orm_job(cls, job) -> IngestionJobResponse:
         return cls(
             job_id=job.id,
-            tenant_id=job.tenant_id,
+            session_id=job.session_id,
             filename=job.filename,
             document_type=job.document_type,
             status=job.status,
@@ -154,7 +154,7 @@ class IngestionJobResponse(_OrmBaseModel):
 
 class UploadResponse(BaseModel):
     job_id: uuid.UUID
-    tenant_id: uuid.UUID
+    session_id: uuid.UUID
     filename: str
     status: IngestionStatus
     message: str

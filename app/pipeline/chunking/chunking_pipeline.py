@@ -48,7 +48,7 @@ class ChunkingPipeline:
             → chunks           ready for EmbeddingPipeline
 
     Strategy is selected at runtime from the ChunkRequest —
-    job_id + tenant_id are sufficient to resolve the source document.
+    job_id + session_id are sufficient to resolve the source document.
     document_id is optional: when provided, only that document is chunked.
 
     Usage:
@@ -57,7 +57,7 @@ class ChunkingPipeline:
             db          = db,
             strategy    = ChunkStrategy.RECURSIVE,
         )
-        result = await pipeline.run(job_id=job_id, tenant_id=tenant_id)
+        result = await pipeline.run(job_id=job_id, session_id=session_id)
     """
 
     # Strategy → chunker class mapping
@@ -106,7 +106,7 @@ class ChunkingPipeline:
     def _build_chunk_creates(
         self,
         result:      ChunkingResult,
-        tenant_id,
+        session_id,
         job_id,
         document_id,
         filename:    str,
@@ -125,7 +125,7 @@ class ChunkingPipeline:
         def _make(item, total: int) -> ChunkCreate:
             return ChunkCreate(
                 id              = uuid.UUID(item.id) if item.id else None,
-                tenant_id       = tenant_id,
+                session_id       = session_id,
                 job_id          = job_id,
                 source_id       = document_id,
                 chunk_text      = item.content,
@@ -153,7 +153,7 @@ class ChunkingPipeline:
     async def run(
         self,
         job_id,
-        tenant_id,
+        session_id,
         document_id = None,
     ) -> dict:
         """
@@ -162,7 +162,7 @@ class ChunkingPipeline:
 
         Args:
             job_id:      UUID of the job.
-            tenant_id:   UUID of the tenant (multi-tenancy guard).
+            session_id:   UUID of the tenant (multi-tenancy guard).
             document_id: Optional — scopes chunking to one document.
                          When omitted all preprocessed records for the
                          job are chunked (batch mode).
@@ -179,13 +179,13 @@ class ChunkingPipeline:
         # ── 1. Resolve preprocessed records ───────────────────────────────────
         if document_id is not None:
             preprocessed = await self.preprocessed_repo.get_by_content_id(
-                content_id=document_id, tenant_id=tenant_id
+                content_id=document_id, session_id=session_id
             )
             records = [preprocessed] if preprocessed else []
         else:
             # Batch: get all preprocessed records for this job
             records = await self.preprocessed_repo.list_by_job_id(
-                job_id=job_id, tenant_id=tenant_id
+                job_id=job_id, session_id=session_id
             )
 
         if not records:
@@ -207,7 +207,7 @@ class ChunkingPipeline:
             # ── 2. Delete existing chunks before re-chunking ─────────────────
             await self.chunk_repo.delete_by_document_id(
                 document_id=record.content_id,
-                tenant_id=tenant_id,
+                session_id=session_id,
             )
 
             for page in record.preprocessed_pages:
@@ -253,7 +253,7 @@ class ChunkingPipeline:
                 # ── 4. Build ChunkCreate objects ──────────────────────────────────
                 child_creates, parent_creates = self._build_chunk_creates(
                     result          = result,
-                    tenant_id       = tenant_id,
+                    session_id       = session_id,
                     job_id          = job_id,
                     document_id     = record.content_id,
                     filename        = record.filename,

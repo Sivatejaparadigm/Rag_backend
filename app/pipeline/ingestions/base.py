@@ -25,10 +25,10 @@ class BaseIngestion(ABC):
         raise NotImplementedError
 
     async def extract(
-        self, *, file_path: Path, tenant_id: uuid.UUID, document_type: DocumentType
+        self, *, file_path: Path, session_id: uuid.UUID, document_type: DocumentType
     ) -> ExtractedContentCreate:
         extractor = self.get_extractor(document_type)
-        return await extractor.extract(file_path=file_path, tenant_id=tenant_id)
+        return await extractor.extract(file_path=file_path, session_id=session_id)
 
     async def preprocess(self, extracted: ExtractedContentCreate) -> str:
         """
@@ -44,11 +44,11 @@ class BaseIngestion(ABC):
 
         return [preprocessed_text] if preprocessed_text else []
 
-    async def persist(self, *, job_id: uuid.UUID, tenant_id: uuid.UUID, extracted: ExtractedContentCreate, chunks: list[str]) -> None:
+    async def persist(self, *, job_id: uuid.UUID, session_id: uuid.UUID, extracted: ExtractedContentCreate, chunks: list[str]) -> None:
         # For now we only persist extracted content (no chunk table yet).
         await self.job_repo.save_content(
             job_id=job_id,
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=extracted.raw_text or "",
             pages=extracted.pages or [],
             tables=extracted.tables or [],
@@ -56,17 +56,17 @@ class BaseIngestion(ABC):
         )
 
     async def run(
-        self, *, job_id: uuid.UUID, file_path: Path, tenant_id: uuid.UUID, document_type: DocumentType
+        self, *, job_id: uuid.UUID, file_path: Path, session_id: uuid.UUID, document_type: DocumentType
     ) -> None:
         await self.job_repo.mark_processing(job_id)
 
         try:
-            extracted = await self.extract(file_path=file_path, tenant_id=tenant_id, document_type=document_type)
+            extracted = await self.extract(file_path=file_path, session_id=session_id, document_type=document_type)
             # 1) Persist raw extracted content first — preprocessing loads from
             #    `extracted_contents` (via the job.content relationship).
             await self.persist(
                 job_id=job_id,
-                tenant_id=tenant_id,
+                session_id=session_id,
                 extracted=extracted,
                 chunks=[],
             )
@@ -75,7 +75,7 @@ class BaseIngestion(ABC):
             from app.pipeline.preprocessor.preprocessing_pipeline import PreprocessingPipeline
 
             pipeline = PreprocessingPipeline(job_repo=self.job_repo, db=self.job_repo.db)
-            preprocessing_result = await pipeline.run(job_id=job_id, tenant_id=tenant_id)
+            preprocessing_result = await pipeline.run(job_id=job_id, session_id=session_id)
 
             # 3) Use preprocessed text for job stats + (future) chunking.
             status = preprocessing_result.get("status")

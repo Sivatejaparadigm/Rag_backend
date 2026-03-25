@@ -23,7 +23,7 @@ class PreprocessedDataRepository:
 
     async def create(self, data: PreprocessedDataCreate) -> PreprocessedData:
         record = PreprocessedData(
-            tenant_id=data.tenant_id,
+            session_id=data.session_id,
             job_id=data.job_id,
             content_id=data.content_id,
             filename=data.filename,
@@ -46,60 +46,60 @@ class PreprocessedDataRepository:
     async def get_by_id(
         self,
         record_id: uuid.UUID,
-        tenant_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> PreprocessedData | None:
         query = select(PreprocessedData).where(PreprocessedData.id == record_id)
-        if tenant_id is not None:
-            query = query.where(PreprocessedData.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(PreprocessedData.session_id == session_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_by_job_id(
         self,
         job_id: uuid.UUID,
-        tenant_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> PreprocessedData | None:
         """Return the preprocessed record for a given ingestion job."""
         query = select(PreprocessedData).where(PreprocessedData.job_id == job_id)
-        if tenant_id is not None:
-            query = query.where(PreprocessedData.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(PreprocessedData.session_id == session_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_by_job_id(
         self,
         job_id: uuid.UUID,
-        tenant_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> list[PreprocessedData]:
         """Return all preprocessed records for a given ingestion job."""
         query = select(PreprocessedData).where(PreprocessedData.job_id == job_id)
-        if tenant_id is not None:
-            query = query.where(PreprocessedData.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(PreprocessedData.session_id == session_id)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def get_by_content_id(
         self,
         content_id: uuid.UUID,
-        tenant_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> PreprocessedData | None:
         """Return the preprocessed record for a given extracted_contents row."""
         query = select(PreprocessedData).where(PreprocessedData.content_id == content_id)
-        if tenant_id is not None:
-            query = query.where(PreprocessedData.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(PreprocessedData.session_id == session_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_by_tenant(
         self,
-        tenant_id: uuid.UUID,
+        session_id: uuid.UUID,
         status: PreprocessStatus | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> list[PreprocessedData]:
         query = (
             select(PreprocessedData)
-            .where(PreprocessedData.tenant_id == tenant_id)
+            .where(PreprocessedData.session_id == session_id)
             .order_by(PreprocessedData.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -111,13 +111,13 @@ class PreprocessedDataRepository:
 
     async def count_by_tenant(
         self,
-        tenant_id: uuid.UUID,
+        session_id: uuid.UUID,
         status: PreprocessStatus | None = None,
     ) -> int:
         query = (
             select(func.count())
             .select_from(PreprocessedData)
-            .where(PreprocessedData.tenant_id == tenant_id)
+            .where(PreprocessedData.session_id == session_id)
         )
         if status is not None:
             query = query.where(PreprocessedData.status == status)

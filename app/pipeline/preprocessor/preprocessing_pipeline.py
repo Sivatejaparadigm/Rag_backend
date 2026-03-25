@@ -41,7 +41,7 @@ class PreprocessingPipeline:
 
     Usage:
         pipeline = PreprocessingPipeline(job_repo=job_repo, db=db)
-        result   = await pipeline.run(job_id=job_id, tenant_id=tenant_id)
+        result   = await pipeline.run(job_id=job_id, session_id=session_id)
     """
 
     def __init__(
@@ -189,7 +189,7 @@ class PreprocessingPipeline:
     async def run(
         self,
         job_id,
-        tenant_id,
+        session_id,
     ) -> dict:
         """
         Load ExtractedContent for job_id, run the full pipeline,
@@ -204,7 +204,7 @@ class PreprocessingPipeline:
         """
 
         # ── 1. Load source job + extracted content ────────────────────────────
-        job = await self.job_repo.get_job(job_id=job_id, tenant_id=tenant_id)
+        job = await self.job_repo.get_job(job_id=job_id, session_id=session_id)
         if not job:
             raise ValueError(f"IngestionJob not found: job_id={job_id}")
 
@@ -232,7 +232,7 @@ class PreprocessingPipeline:
             else:
                 await self.preprocessed_repo.create(
                     PreprocessedDataCreate(
-                        tenant_id=tenant_id,
+                        session_id=session_id,
                         job_id=job_id,
                         content_id=content.id,
                         filename=job.filename,
@@ -279,7 +279,7 @@ class PreprocessingPipeline:
         else:
             record = await self.preprocessed_repo.create(
                 PreprocessedDataCreate(
-                    tenant_id=tenant_id,
+                    session_id=session_id,
                     job_id=job_id,
                     content_id=content.id,
                     filename=job.filename,

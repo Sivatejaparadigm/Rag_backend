@@ -51,7 +51,7 @@ class PreprocessedData(Base):
 
     Denormalised columns (from IngestionJob)
     ────────────────────────────────────────
-    tenant_id, filename, document_type, source_type, source_uri are copied
+    session_id, filename, document_type, source_type, source_uri are copied
     so this table is independently queryable without a join.
     """
 
@@ -67,11 +67,11 @@ class PreprocessedData(Base):
 
     # ── Multi-tenancy ─────────────────────────────────────────────────────────
 
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
+    session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
         index=True,
-        comment="Copied from ingestion_jobs.tenant_id.",
+        comment="Copied from ingestion_jobs.session_id.",
     )
 
     # ── Foreign keys ──────────────────────────────────────────────────────────

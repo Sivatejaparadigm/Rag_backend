@@ -43,7 +43,7 @@ class ChunkingService:
     async def chunk_job(
         self,
         job_id: uuid.UUID,
-        tenant_id: uuid.UUID,
+        session_id: uuid.UUID,
         preprocessed_records: List[PreprocessedData],
         strategy: ChunkStrategy,
         chunk_size: int = 500,
@@ -105,7 +105,7 @@ class ChunkingService:
 
                 for chunk_text in page_chunks:
                     chunk_create = ChunkCreate(
-                        tenant_id=tenant_id,
+                        session_id=session_id,
                         job_id=job_id,
                         source_id=record.content_id,
                         chunk_text=chunk_text,

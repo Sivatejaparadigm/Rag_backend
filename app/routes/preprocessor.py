@@ -21,7 +21,7 @@ router = APIRouter()
 @router.post("/preprocess/{job_id}", response_model=PreprocessResponse)
 async def run_preprocess(
     job_id: uuid.UUID,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -33,7 +33,7 @@ async def run_preprocess(
     try:
         job_repo = JobRepository(db)
         pipeline = PreprocessingPipeline(job_repo=job_repo, db=db)
-        await pipeline.run(job_id=job_id, tenant_id=tenant_id)
+        await pipeline.run(job_id=job_id, session_id=session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
@@ -42,7 +42,7 @@ async def run_preprocess(
     # Re-fetch persisted record so we can return raw + cleaned text even
     # when the pipeline returned `record=None` (e.g. exceptions).
     repo = PreprocessedDataRepository(db)
-    record = await repo.get_by_job_id(job_id=job_id, tenant_id=tenant_id)
+    record = await repo.get_by_job_id(job_id=job_id, session_id=session_id)
     if not record:
         raise HTTPException(status_code=404, detail="preprocessed_data not found for job_id")
 
@@ -51,7 +51,7 @@ async def run_preprocess(
 
     return PreprocessResponse(
         job_id=job_id,
-        tenant_id=tenant_id,
+        session_id=session_id,
         filename=record.filename,
         status=status,
         message=message,
@@ -62,27 +62,27 @@ async def run_preprocess(
 
 @router.get("/preprocess", response_model=PreprocessListResponse)
 async def list_preprocessed(
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     status: PreprocessStatus | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     repo = PreprocessedDataRepository(db)
-    total = await repo.count_by_tenant(tenant_id=tenant_id, status=status)
-    records = await repo.list_by_tenant(tenant_id=tenant_id, status=status, limit=limit, offset=offset)
+    total = await repo.count_by_tenant(session_id=session_id, status=status)
+    records = await repo.list_by_tenant(session_id=session_id, status=status, limit=limit, offset=offset)
     return PreprocessListResponse(total=total, limit=limit, offset=offset, records=records)
 
 
 @router.delete("/preprocess/{job_id}")
 async def delete_preprocessed_by_job(
     job_id: uuid.UUID,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete preprocessed data for a job by job ID and tenant ID."""
     repo = PreprocessedDataRepository(db)
-    records = await repo.list_by_job_id(job_id=job_id, tenant_id=tenant_id)
+    records = await repo.list_by_job_id(job_id=job_id, session_id=session_id)
     if not records:
         raise HTTPException(status_code=404, detail=f"No preprocessed data found for job: {job_id}")
 
@@ -95,6 +95,6 @@ async def delete_preprocessed_by_job(
     return {
         "message": f"Deleted {deleted_count} preprocessed record(s) for job {job_id}",
         "job_id": job_id,
-        "tenant_id": tenant_id,
+        "session_id": session_id,
         "deleted_count": deleted_count,
     }

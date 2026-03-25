@@ -17,11 +17,11 @@ class JobRepository:
 
     #Job Creation
 
-    async def create_job(self, filename: str, document_type: str, tenant_id: uuid.UUID) -> IngestionJob:
+    async def create_job(self, filename: str, document_type: str, session_id: uuid.UUID) -> IngestionJob:
         job = IngestionJob(
             filename=filename,
             document_type=document_type,
-            tenant_id=tenant_id,
+            session_id=session_id,
             status="pending",
         )
         self.db.add(job)
@@ -30,17 +30,17 @@ class JobRepository:
 
     # Job Read
 
-    async def get_job(self, job_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> IngestionJob | None:
+    async def get_job(self, job_id: uuid.UUID, session_id: uuid.UUID | None = None) -> IngestionJob | None:
         query = select(IngestionJob).where(IngestionJob.id == job_id)
-        if tenant_id is not None:
-            query = query.where(IngestionJob.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(IngestionJob.session_id == session_id)
         query = query.options(selectinload(IngestionJob.content))  # load content in same query
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_jobs(
         self,
-        tenant_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
         status: str = None,
         limit: int = 20,
         offset: int = 0,
@@ -52,19 +52,19 @@ class JobRepository:
             .limit(limit)
             .offset(offset)
         )
-        if tenant_id is not None:
-            query = query.where(IngestionJob.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(IngestionJob.session_id == session_id)
         if status:
             query = query.where(IngestionJob.status == status)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def count_jobs(self, tenant_id: uuid.UUID | None = None, status: str = None) -> int:
+    async def count_jobs(self, session_id: uuid.UUID | None = None, status: str = None) -> int:
         from sqlalchemy import func
         query = select(func.count()).select_from(IngestionJob)
-        if tenant_id is not None:
-            query = query.where(IngestionJob.tenant_id == tenant_id)
+        if session_id is not None:
+            query = query.where(IngestionJob.session_id == session_id)
         if status:
             query = query.where(IngestionJob.status == status)
         result = await self.db.execute(query)
@@ -137,7 +137,7 @@ class JobRepository:
     async def save_content(
         self,
         job_id: uuid.UUID,
-        tenant_id: uuid.UUID,
+        session_id: uuid.UUID,
         raw_text: str,
         pages: list,
         tables: list,
@@ -145,7 +145,7 @@ class JobRepository:
     ) -> ExtractedContent:
         content = ExtractedContent(
             job_id=job_id,
-            tenant_id=tenant_id,
+            session_id=session_id,
             raw_text=raw_text,
             pages=pages,
             tables=tables,

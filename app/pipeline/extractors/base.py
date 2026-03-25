@@ -17,13 +17,13 @@ class BaseExtractor(ABC):
     supported_type: DocumentType
 
     @abstractmethod
-    async def extract(self, file_path: Path, tenant_id: uuid.UUID) -> ExtractedContentCreate:
+    async def extract(self, file_path: Path, session_id: uuid.UUID) -> ExtractedContentCreate:
         """
         Extract content from a document.
 
         Args:
             file_path: path to the saved file on disk
-            tenant_id: passed through and stored on the content row
+            session_id: passed through and stored on the content row
 
         Returns:
             ExtractedContentCreate — ready to be saved by the repository

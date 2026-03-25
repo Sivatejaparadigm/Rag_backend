@@ -117,7 +117,7 @@ class ChunkingResult:
 
 class ChunkCreate(BaseModel):
     id:              Optional[uuid.UUID] = None
-    tenant_id:       uuid.UUID
+    session_id:       uuid.UUID
     job_id:          uuid.UUID
     source_id:       uuid.UUID
     chunk_text:      str
@@ -146,7 +146,7 @@ class ChunkUpdate(BaseModel):
 # ── API request / response ─────────────────────────────────────
 
 class ChunkingRequest(BaseModel):
-    tenant_id:           uuid.UUID
+    session_id:           uuid.UUID
     job_id:              uuid.UUID
     strategy:            ChunkStrategy = Field(default=ChunkStrategy.RECURSIVE)
     fixed_config:        Optional[FixedSizeConfig]   = None
@@ -158,7 +158,7 @@ class ChunkingRequest(BaseModel):
 
 class ChunkingResponse(BaseModel):
     job_id:         uuid.UUID
-    tenant_id:      uuid.UUID
+    session_id:      uuid.UUID
     # chunks_created: Optional[int] = None
     chunk_strategy: str
     config:         Optional[dict] = None
@@ -179,7 +179,7 @@ class ChunkSummary(BaseModel):
 
 
 class ChunkListResponse(BaseModel):
-    """Returned by GET /chunks?tenant_id=..."""
+    """Returned by GET /chunks?session_id=..."""
     total:  int
     limit:  int
     offset: int

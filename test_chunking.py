@@ -36,7 +36,7 @@ async def test_all_strategies():
     # Create a mock preprocessed record
     mock_record = PreprocessedData(
         id=uuid.uuid4(),
-        tenant_id=uuid.uuid4(),
+        session_id=uuid.uuid4(),
         job_id=uuid.uuid4(),
         content_id=uuid.uuid4(),
         preprocessed_text=sample_text,
@@ -93,7 +93,7 @@ async def test_all_strategies():
         try:
             chunks_created = await service.chunk_job(
                 job_id=uuid.uuid4(),
-                tenant_id=uuid.uuid4(),
+                session_id=uuid.uuid4(),
                 preprocessed_records=[mock_record],
                 strategy=strategy,
                 chunk_size=300,

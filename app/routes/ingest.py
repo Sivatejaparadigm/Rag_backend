@@ -54,7 +54,7 @@ async def validate_file(file: UploadFile) -> bytes:
 async def upload_and_ingest(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    tenant_id: uuid.UUID = Form(...),
+    session_id: uuid.UUID = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
     contents = await validate_file(file)
@@ -70,11 +70,11 @@ async def upload_and_ingest(
     job = await job_repo.create_job(
         filename=file.filename,
         document_type=inferred_type.value,
-        tenant_id=tenant_id,
+        session_id=session_id,
     )
 
     uploads_dir = ensure_uploads_dir()
-    tenant_dir = uploads_dir / str(tenant_id)
+    tenant_dir = uploads_dir / str(session_id)
     tenant_dir.mkdir(parents=True, exist_ok=True)
     dest: Path = tenant_dir / f"{job.id}_{sanitize_filename(file.filename)}"
 
@@ -94,13 +94,13 @@ async def upload_and_ingest(
         _run_ingestion_background,
         job_id=job.id,
         file_path=dest,
-        tenant_id=tenant_id,
+        session_id=session_id,
         document_type=inferred_type,
     )
 
     return UploadResponse(
         job_id=job.id,
-        tenant_id=tenant_id,
+        session_id=session_id,
         filename=job.filename,
         status=IngestionStatus.PENDING,
         message="File uploaded. Extraction running in background. Poll /jobs/{job_id} for status.",
@@ -113,7 +113,7 @@ async def upload_and_ingest(
 async def upload_batch(
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
-    tenant_id: uuid.UUID = Form(...),
+    session_id: uuid.UUID = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
     if len(files) > settings.MAX_BATCH_FILES:
@@ -124,7 +124,7 @@ async def upload_batch(
 
     job_repo = JobRepository(db)
     uploads_dir = ensure_uploads_dir()
-    tenant_dir = uploads_dir / str(tenant_id)
+    tenant_dir = uploads_dir / str(session_id)
     tenant_dir.mkdir(parents=True, exist_ok=True)
 
     responses = []
@@ -143,7 +143,7 @@ async def upload_batch(
         job = await job_repo.create_job(
             filename=file.filename,
             document_type=inferred_type.value,
-            tenant_id=tenant_id,
+            session_id=session_id,
         )
 
         dest = tenant_dir / f"{job.id}_{sanitize_filename(file.filename)}"
@@ -161,13 +161,13 @@ async def upload_batch(
             _run_ingestion_background,
             job_id=job.id,
             file_path=dest,
-            tenant_id=tenant_id,
+            session_id=session_id,
             document_type=inferred_type,
         )
 
         responses.append(UploadResponse(
             job_id=job.id,
-            tenant_id=tenant_id,
+            session_id=session_id,
             filename=job.filename,
             status=IngestionStatus.PENDING,
             message="Queued for extraction.",
@@ -182,11 +182,11 @@ async def upload_batch(
 @router.get("/jobs/{job_id}", response_model=IngestionJobResponse)
 async def get_job(
     job_id: uuid.UUID,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     job_repo = JobRepository(db)
-    job = await job_repo.get_job(job_id, tenant_id=tenant_id)
+    job = await job_repo.get_job(job_id, session_id=session_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return IngestionJobResponse.from_orm_job(job)
@@ -196,7 +196,7 @@ async def get_job(
 
 @router.get("/jobs", response_model=JobListResponse)
 async def list_jobs(
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     status: IngestionStatus | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -204,9 +204,9 @@ async def list_jobs(
 ):
     job_repo = JobRepository(db)
     status_value = status.value if status else None
-    total = await job_repo.count_jobs(tenant_id=tenant_id, status=status_value)
+    total = await job_repo.count_jobs(session_id=session_id, status=status_value)
     jobs = await job_repo.list_jobs(
-        tenant_id=tenant_id,
+        session_id=session_id,
         status=status_value,
         limit=limit,
         offset=offset,
@@ -220,11 +220,11 @@ async def list_jobs(
 @router.delete("/jobs/{job_id}")
 async def delete_job(
     job_id: uuid.UUID,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     job_repo = JobRepository(db)
-    job = await job_repo.get_job(job_id, tenant_id=tenant_id)
+    job = await job_repo.get_job(job_id, session_id=session_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -248,11 +248,11 @@ async def delete_job(
 async def retry_job(
     job_id: uuid.UUID,
     background_tasks: BackgroundTasks,
-    tenant_id: uuid.UUID = Query(...),
+    session_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     job_repo = JobRepository(db)
-    job = await job_repo.get_job(job_id, tenant_id=tenant_id)
+    job = await job_repo.get_job(job_id, session_id=session_id)
 
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -276,13 +276,13 @@ async def retry_job(
         _run_ingestion_background,
         job_id=job.id,
         file_path=Path(job.source_uri),
-        tenant_id=tenant_id,
+        session_id=session_id,
         document_type=DocumentType(job.document_type),
     )
 
     return UploadResponse(
         job_id=job.id,
-        tenant_id=tenant_id,
+        session_id=session_id,
         filename=job.filename,
         status=IngestionStatus.PROCESSING,
         message="Retry started. Poll /jobs/{job_id} for status.",
@@ -294,7 +294,7 @@ async def retry_job(
 async def _run_ingestion_background(
     job_id: uuid.UUID,
     file_path: Path,
-    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
     document_type: DocumentType,
 ) -> None:
     """
@@ -309,7 +309,7 @@ async def _run_ingestion_background(
             await ingestion.run(
                 job_id=job_id,
                 file_path=file_path,
-                tenant_id=tenant_id,
+                session_id=session_id,
                 document_type=document_type,
             )
             await db.commit()

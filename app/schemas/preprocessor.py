@@ -26,7 +26,7 @@ class _OrmBaseModel(BaseModel):
 # ── Create (internal — written to DB) ─────────────────────────
 
 class PreprocessedDataCreate(_OrmBaseModel):
-    tenant_id:          uuid.UUID
+    session_id:          uuid.UUID
     job_id:             uuid.UUID
     content_id:         uuid.UUID
     filename:           str | None = None
@@ -69,7 +69,7 @@ class PreprocessingResult(BaseModel):
 class PreprocessedDataResponse(_OrmBaseModel):
     """Single record — shown in GET /preprocess/{job_id}"""
     id:            uuid.UUID
-    tenant_id:     uuid.UUID
+    session_id:     uuid.UUID
     job_id:        uuid.UUID
     content_id:    uuid.UUID
     filename:      str | None
@@ -86,7 +86,7 @@ class PreprocessedDataResponse(_OrmBaseModel):
 class PreprocessResponse(BaseModel):
     """Returned by POST /preprocess/{job_id}"""
     job_id:    uuid.UUID
-    tenant_id: uuid.UUID
+    session_id: uuid.UUID
     filename:  str | None
     status:    PreprocessStatus
     message:   str
@@ -104,7 +104,7 @@ class PreprocessSummary(_OrmBaseModel):
 
 
 class PreprocessListResponse(BaseModel):
-    """Returned by GET /preprocess?tenant_id=..."""
+    """Returned by GET /preprocess?session_id=..."""
     total:   int
     limit:   int
     offset:  int
