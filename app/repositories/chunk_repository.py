@@ -17,7 +17,7 @@ class ChunkRepository:
 
     async def create(self, data: ChunkCreate) -> Chunk:
         """Create a single chunk."""
-        record = Chunk(
+        kwargs = dict(
             tenant_id=data.tenant_id,
             job_id=data.job_id,
             source_id=data.source_id,
@@ -36,14 +36,18 @@ class ChunkRepository:
             entities=data.entities,
             keywords=data.keywords,
         )
+        if data.id is not None:
+            kwargs["id"] = data.id
+        record = Chunk(**kwargs)
         self.db.add(record)
         await self.db.flush()
         return record
 
     async def create_many(self, items: list[ChunkCreate]) -> list[Chunk]:
         """Bulk insert chunks."""
-        records = [
-            Chunk(
+        records = []
+        for d in items:
+            kwargs = dict(
                 tenant_id=d.tenant_id,
                 job_id=d.job_id,
                 source_id=d.source_id,
@@ -62,8 +66,9 @@ class ChunkRepository:
                 entities=d.entities,
                 keywords=d.keywords,
             )
-            for d in items
-        ]
+            if d.id is not None:
+                kwargs["id"] = d.id
+            records.append(Chunk(**kwargs))
         self.db.add_all(records)
         await self.db.flush()
         return records
@@ -112,3 +117,21 @@ class ChunkRepository:
         result = await self.db.execute(query)
         await self.db.flush()
         return result.rowcount or 0
+
+    async def delete_by_document_id(self, document_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> int:
+        """Delete all chunks for a specific document (source_id)."""
+        query = delete(Chunk).where(Chunk.source_id == document_id)
+        if tenant_id is not None:
+            query = query.where(Chunk.tenant_id == tenant_id)
+        result = await self.db.execute(query)
+        await self.db.flush()
+        return result.rowcount or 0
+
+    async def delete_by_id(self, chunk_id: uuid.UUID, tenant_id: uuid.UUID | None = None) -> bool:
+        """Delete a single chunk by its ID."""
+        chunk = await self.get_by_id(chunk_id=chunk_id, tenant_id=tenant_id)
+        if not chunk:
+            return False
+        await self.db.delete(chunk)
+        await self.db.flush()
+        return True

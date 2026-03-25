@@ -62,7 +62,6 @@ class BaseIngestion(ABC):
 
         try:
             extracted = await self.extract(file_path=file_path, tenant_id=tenant_id, document_type=document_type)
-<<<<<<< HEAD
             # 1) Persist raw extracted content first — preprocessing loads from
             #    `extracted_contents` (via the job.content relationship).
             await self.persist(
@@ -94,12 +93,6 @@ class BaseIngestion(ABC):
                 preprocessed_text = record.preprocessed_text
 
             chunks = await self.chunk(preprocessed_text)
-=======
-            preprocessed_text = await self.preprocess(extracted)
-            chunks = await self.chunk(preprocessed_text)
-            await self.persist(job_id=job_id, tenant_id=tenant_id, extracted=extracted, chunks=chunks)
-
->>>>>>> f425f686a1d9fa7ceb4ac42affb0b118e08c77a3
             word_count = len(preprocessed_text.split()) if preprocessed_text.strip() else 0
             page_count = len(extracted.pages or [])
             await self.job_repo.mark_completed(job_id=job_id, word_count=word_count, page_count=page_count)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -123,6 +124,7 @@ class ChunkingPipeline:
         """
         def _make(item, total: int) -> ChunkCreate:
             return ChunkCreate(
+                id              = uuid.UUID(item.id) if item.id else None,
                 tenant_id       = tenant_id,
                 job_id          = job_id,
                 source_id       = document_id,
@@ -133,7 +135,7 @@ class ChunkingPipeline:
                 language        = language,
                 lang_confidence = lang_confidence,
                 chunk_strategy  = self.strategy.value,
-                parent_chunk_id = item.parent_chunk_id,
+                parent_chunk_id = uuid.UUID(item.parent_chunk_id) if item.parent_chunk_id else None,
             )
 
         child_creates = [

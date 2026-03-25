@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_experimental.text_splitter import SemanticChunker
+from langchain_text_splitters import CharacterTextSplitter, RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker as LangchainSemanticChunker
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from app.pipeline.chunking.base import BaseChunker
@@ -145,7 +145,7 @@ class SemanticChunker(BaseChunker):
 
     def chunk(self, text: str) -> ChunkingResult:
         try:
-            splitter = SemanticChunker(
+            splitter = LangchainSemanticChunker(
                 embeddings                   = self._embeddings,
                 breakpoint_threshold_type    = self.config.breakpoint_threshold_type,
                 breakpoint_threshold_amount  = self.config.breakpoint_threshold_amount,
@@ -210,9 +210,10 @@ Return ONLY the chunks separated by ---CHUNK--- and nothing else."""
     def _build_llm(self):
         if self.config.provider == "google":
             from langchain_google_genai import ChatGoogleGenerativeAI
+            from app.core.config import settings
             return ChatGoogleGenerativeAI(
                 model          = self.config.model,
-                google_api_key = os.environ["GOOGLE_API_KEY"],
+                google_api_key = settings.GOOGLE_API_KEY,
                 temperature    = self.config.temperature,
             )
         if self.config.provider == "openai":

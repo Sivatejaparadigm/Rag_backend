@@ -8,7 +8,7 @@ from app.schemas.chunking_schemas import ChunkingRequest, ChunkingResponse, Chun
 from app.repositories.job_repository import JobRepository
 from app.repositories.preprocessor_repository import PreprocessedDataRepository
 from app.repositories.chunk_repository import ChunkRepository
-from app.services.chunking_service import ChunkingService
+from app.pipeline.chunking.chunking_pipeline import ChunkingPipeline
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ async def create_chunks(
         {
             "tenant_id": "<uuid>",
             "job_id": "<uuid>",
-            "chunk_strategy": "recursive"
+            "strategy": "recursive"
         }
     """
     try:
@@ -46,24 +46,41 @@ async def create_chunks(
         if not preprocessed_records:
             raise ValueError(f"No preprocessed data found for job: {req.job_id}")
         
-        # Create chunking service and run it
-        chunking_service = ChunkingService(chunk_repo=chunk_repo)
-        chunks_created = await chunking_service.chunk_job(
+        # Select the correct config
+        config = None
+        if req.strategy == ChunkStrategy.FIXED:
+            config = req.fixed_config
+        elif req.strategy == ChunkStrategy.RECURSIVE:
+            config = req.recursive_config
+        elif req.strategy == ChunkStrategy.SEMANTIC:
+            config = req.semantic_config
+        elif req.strategy == ChunkStrategy.AGENTIC:
+            config = req.agentic_config
+        elif req.strategy == ChunkStrategy.PARENT_CHILD:
+            config = req.parent_child_config
+
+        # Create chunking pipeline and run it
+        pipeline = ChunkingPipeline(
+            job_repo=job_repo,
+            db=db,
+            strategy=req.strategy,
+            config=config,
+        )
+        
+        result = await pipeline.run(
             job_id=req.job_id,
             tenant_id=req.tenant_id,
-            preprocessed_records=preprocessed_records,
-            strategy=req.chunk_strategy,
-            chunk_size=req.chunk_size,
-            chunk_overlap=req.chunk_overlap,
         )
+        
+        chunks_created = result.get("chunks_saved", 0) + result.get("parents_saved", 0)
         
         return ChunkingResponse(
             job_id=req.job_id,
             tenant_id=req.tenant_id,
             chunks_created=chunks_created,
-            chunk_strategy=req.chunk_strategy,
-            message=f"Successfully created {chunks_created} chunks",
-            status="completed",
+            chunk_strategy=req.strategy.value if hasattr(req.strategy, 'value') else str(req.strategy),
+            message=result.get("message", f"Successfully created {chunks_created} chunks"),
+            status=result.get("status", "completed").value if hasattr(result.get("status", "completed"), 'value') else result.get("status", "completed"),
         )
         
     except ValueError as exc:
@@ -109,4 +126,43 @@ async def get_job_chunks(
             }
             for c in chunks
         ],
+    }
+
+
+@router.delete("/{chunk_id}")
+async def delete_chunk_by_id(
+    chunk_id: uuid.UUID,
+    tenant_id: uuid.UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a single chunk by its chunk ID and tenant ID."""
+    chunk_repo = ChunkRepository(db)
+    deleted = await chunk_repo.delete_by_id(chunk_id=chunk_id, tenant_id=tenant_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Chunk not found: {chunk_id}")
+    await db.commit()
+    return {
+        "message": f"Chunk {chunk_id} deleted successfully",
+        "chunk_id": chunk_id,
+        "tenant_id": tenant_id,
+    }
+
+
+@router.delete("/job/{job_id}")
+async def delete_chunks_by_job(
+    job_id: uuid.UUID,
+    tenant_id: uuid.UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete all chunks for a job by job ID and tenant ID."""
+    chunk_repo = ChunkRepository(db)
+    deleted_count = await chunk_repo.delete_by_job_id(job_id=job_id, tenant_id=tenant_id)
+    if deleted_count == 0:
+        raise HTTPException(status_code=404, detail=f"No chunks found for job: {job_id}")
+    await db.commit()
+    return {
+        "message": f"Deleted {deleted_count} chunks for job {job_id}",
+        "job_id": job_id,
+        "tenant_id": tenant_id,
+        "deleted_count": deleted_count,
     }

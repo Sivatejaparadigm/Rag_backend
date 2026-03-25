@@ -73,3 +73,28 @@ async def list_preprocessed(
     records = await repo.list_by_tenant(tenant_id=tenant_id, status=status, limit=limit, offset=offset)
     return PreprocessListResponse(total=total, limit=limit, offset=offset, records=records)
 
+
+@router.delete("/preprocess/{job_id}")
+async def delete_preprocessed_by_job(
+    job_id: uuid.UUID,
+    tenant_id: uuid.UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete preprocessed data for a job by job ID and tenant ID."""
+    repo = PreprocessedDataRepository(db)
+    records = await repo.list_by_job_id(job_id=job_id, tenant_id=tenant_id)
+    if not records:
+        raise HTTPException(status_code=404, detail=f"No preprocessed data found for job: {job_id}")
+
+    deleted_count = 0
+    for record in records:
+        await repo.delete(record.id)
+        deleted_count += 1
+
+    await db.commit()
+    return {
+        "message": f"Deleted {deleted_count} preprocessed record(s) for job {job_id}",
+        "job_id": job_id,
+        "tenant_id": tenant_id,
+        "deleted_count": deleted_count,
+    }

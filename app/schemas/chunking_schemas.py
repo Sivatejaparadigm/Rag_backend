@@ -131,6 +131,7 @@ class ChunkingResult:
 
 class ChunkCreate(BaseModel):
     """Schema for creating a new chunk in the database."""
+    id:              Optional[uuid.UUID] = None  # Set explicitly for parent-child linking
     tenant_id:       uuid.UUID
     job_id:          uuid.UUID
     source_id:       uuid.UUID  # Links to ExtractedContent
@@ -166,12 +167,15 @@ class ChunkingRequest(BaseModel):
     """POST /api/v1/chunking - Create chunks for a job."""
     tenant_id:       uuid.UUID = Field(..., description="Tenant ID")
     job_id:          uuid.UUID = Field(..., description="Ingestion job ID")
-    chunk_strategy:  ChunkStrategy = Field(
+    strategy:        ChunkStrategy = Field(
         default=ChunkStrategy.RECURSIVE,
         description="fixed | recursive | semantic | agentic | parent_child"
     )
-    chunk_size:      int = Field(default=500, ge=50, le=8000)
-    chunk_overlap:   int = Field(default=100, ge=0, le=2000)
+    fixed_config:        Optional[FixedSizeConfig]   = None
+    recursive_config:    Optional[RecursiveConfig]   = None
+    semantic_config:     Optional[SemanticConfig]    = None
+    agentic_config:      Optional[AgenticConfig]     = None
+    parent_child_config: Optional[ParentChildConfig] = None
 
 
 class ChunkingResponse(BaseModel):
