@@ -44,7 +44,12 @@ class IngestionJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    content: Mapped["ExtractedContent"] = relationship(back_populates="job", uselist=False)
+    content: Mapped["ExtractedContent"] = relationship(
+    back_populates="job",
+    uselist=False,
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+)
 
 
 class ExtractedContent(Base):

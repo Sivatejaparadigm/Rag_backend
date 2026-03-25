@@ -9,9 +9,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-# ==============================================================================
-# Enums
-# ==============================================================================
+# ── Enums ─────────────────────────────────────────────────────
 
 class ChunkStrategy(str, Enum):
     FIXED        = "fixed"
@@ -36,9 +34,7 @@ class BreakpointType(str, Enum):
     GRADIENT      = "gradient"
 
 
-# ==============================================================================
-# Strategy config schemas
-# ==============================================================================
+# ── Strategy configs (internal — passed in request body) ──────
 
 class FixedSizeConfig(BaseModel):
     chunk_size:    int = Field(default=500, ge=50,  le=8000)
@@ -67,7 +63,7 @@ class RecursiveConfig(BaseModel):
 
 
 class SemanticConfig(BaseModel):
-    embedding_model:             str           = Field(
+    embedding_model:             str            = Field(
         default="sentence-transformers/all-MiniLM-L6-v2"
     )
     breakpoint_threshold_type:   BreakpointType = Field(
@@ -98,13 +94,10 @@ class ParentChildConfig(BaseModel):
         return self
 
 
-# ==============================================================================
-# Internal dataclasses — used inside the pipeline, never exposed via API
-# ==============================================================================
+# ── Internal dataclasses (pipeline only — never in API) ───────
 
 @dataclass
 class ChunkItem:
-    """Single chunk produced by a chunking strategy."""
     content:         str
     chunk_index:     int
     chunk_type:      str
@@ -114,27 +107,19 @@ class ChunkItem:
 
 @dataclass
 class ChunkingResult:
-    """
-    Returned by every BaseChunker.chunk() call.
-    passed=False stops the pipeline — no chunks are saved.
-    """
     chunks:        list[ChunkItem]
     passed:        bool            = True
     parent_chunks: list[ChunkItem] = field(default_factory=list)
     error_message: Optional[str]   = None
 
 
-
-# ==============================================================================
-# DB schemas — used by ChunkRepository
-# ==============================================================================
+# ── DB schemas (used by ChunkRepository — never in API) ───────
 
 class ChunkCreate(BaseModel):
-    """Schema for creating a new chunk in the database."""
-    id:              Optional[uuid.UUID] = None  # Set explicitly for parent-child linking
+    id:              Optional[uuid.UUID] = None
     tenant_id:       uuid.UUID
     job_id:          uuid.UUID
-    source_id:       uuid.UUID  # Links to ExtractedContent
+    source_id:       uuid.UUID
     chunk_text:      str
     chunk_index:     int
     token_count:     float = 0.0
@@ -143,7 +128,7 @@ class ChunkCreate(BaseModel):
     heading_level:   Optional[int] = None
     language:        str = "UNKNOWN"
     lang_confidence: float = 0.0
-    chunk_strategy:  str  # ChunkStrategy.value
+    chunk_strategy:  str
     parent_chunk_id: Optional[uuid.UUID] = None
     topic:           Optional[str] = None
     doc_type:        Optional[str] = None
@@ -152,25 +137,18 @@ class ChunkCreate(BaseModel):
 
 
 class ChunkUpdate(BaseModel):
-    """Schema for updating a chunk."""
     content:       Optional[str] = None
     status:        Optional[ChunkStatus] = None
     embedding:     Optional[list[float]] = None
     error_message: Optional[str] = None
 
 
-# ==============================================================================
-# API request / response schemas — used by the route
-# ==============================================================================
+# ── API request / response ─────────────────────────────────────
 
 class ChunkingRequest(BaseModel):
-    """POST /api/v1/chunking - Create chunks for a job."""
-    tenant_id:       uuid.UUID = Field(..., description="Tenant ID")
-    job_id:          uuid.UUID = Field(..., description="Ingestion job ID")
-    strategy:        ChunkStrategy = Field(
-        default=ChunkStrategy.RECURSIVE,
-        description="fixed | recursive | semantic | agentic | parent_child"
-    )
+    tenant_id:           uuid.UUID
+    job_id:              uuid.UUID
+    strategy:            ChunkStrategy = Field(default=ChunkStrategy.RECURSIVE)
     fixed_config:        Optional[FixedSizeConfig]   = None
     recursive_config:    Optional[RecursiveConfig]   = None
     semantic_config:     Optional[SemanticConfig]    = None
@@ -179,10 +157,29 @@ class ChunkingRequest(BaseModel):
 
 
 class ChunkingResponse(BaseModel):
-    """Response for chunking operations."""
-    job_id:           uuid.UUID
-    tenant_id:        uuid.UUID
-    chunks_created:   int
-    chunk_strategy:   str
-    message:          str
-    status:           str  # completed, failed, etc.
+    job_id:         uuid.UUID
+    tenant_id:      uuid.UUID
+    chunks_created: int
+    chunk_strategy: str
+    status:         ChunkStatus
+    message:        str
+
+
+class ChunkSummary(BaseModel):
+    """Single item in list response — minimal"""
+    id:             uuid.UUID
+    job_id:         uuid.UUID
+    chunk_index:    int
+    chunk_strategy: str
+    token_count:    float
+    language:       str
+    status:         ChunkStatus
+    created_at:     datetime
+
+
+class ChunkListResponse(BaseModel):
+    """Returned by GET /chunks?tenant_id=..."""
+    total:  int
+    limit:  int
+    offset: int
+    chunks: list[ChunkSummary]
