@@ -16,6 +16,7 @@ from app.schemas.ingestion import (
     DocumentType,
     IngestionJobResponse,
     IngestionStatus,
+    IngestionJobSummary,
     JobListResponse,
     UploadResponse,
 )
@@ -187,7 +188,7 @@ async def get_job(
     job = await job_repo.get_job(job_id, tenant_id=tenant_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return IngestionJobResponse.from_orm_job(job)
 
 
 # ── List jobs ─────────────────────────────────────────────────
@@ -209,7 +210,8 @@ async def list_jobs(
         limit=limit,
         offset=offset,
     )
-    return JobListResponse(total=total, limit=limit, offset=offset, jobs=jobs)
+    return JobListResponse(total=total, limit=limit, offset=offset, 
+    jobs=[IngestionJobSummary.from_orm_job(job) for job in jobs])  
 
 
 # ── Delete job ────────────────────────────────────────────────

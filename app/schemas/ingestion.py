@@ -49,27 +49,6 @@ class _OrmBaseModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ── Extracted Content ──────────────────────────────────────────
-
-class ExtractedContentCreate(_OrmBaseModel):
-    tenant_id: uuid.UUID
-    raw_text: str | None = None
-    pages: list[Any] | None = None
-    tables: list[Any] | None = None
-    warnings: list[Any] | None = None
-
-
-class ExtractedContentResponse(_OrmBaseModel):
-    id: uuid.UUID
-    job_id: uuid.UUID
-    tenant_id: uuid.UUID
-    raw_text: str | None
-    pages: list[Any] | None
-    tables: list[Any] | None
-    warnings: list[Any] | None
-    created_at: datetime
-
-
 # ── Ingestion Job ──────────────────────────────────────────────
 
 class IngestionJobCreate(_OrmBaseModel):
@@ -90,24 +69,64 @@ class IngestionJobStatusUpdate(_OrmBaseModel):
     completed_at: datetime | None = None
 
 
+# ── List item — minimal, no content ───────────────────────────
+
+class IngestionJobSummary(_OrmBaseModel):
+    job_id: uuid.UUID = None
+    tenant_id: uuid.UUID
+    filename: str
+    status: IngestionStatus
+    word_count: int | None
+    page_count: int | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @classmethod
+    def from_orm_job(cls, job) -> IngestionJobSummary:
+        return cls(
+            job_id=job.id,
+            tenant_id=job.tenant_id,
+            filename=job.filename,
+            status=job.status,
+            word_count=job.word_count,
+            page_count=job.page_count,
+            created_at=job.created_at,
+        )
+
+
+# ── Single job GET — full detail ───────────────────────────────
+
 class IngestionJobResponse(_OrmBaseModel):
-    id: uuid.UUID
+    job_id: uuid.UUID = None
     tenant_id: uuid.UUID
     filename: str
     document_type: DocumentType | None
-    source_type: SourceType | None
-    source_uri: str | None
-    destination_type: DestinationType | None
-    destination_uri: str | None
     status: IngestionStatus
-    retry_count: int
     error_message: str | None
     word_count: int | None
     page_count: int | None
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None
-    content: ExtractedContentResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @classmethod
+    def from_orm_job(cls, job) -> IngestionJobResponse:
+        return cls(
+            job_id=job.id,
+            tenant_id=job.tenant_id,
+            filename=job.filename,
+            document_type=job.document_type,
+            status=job.status,
+            error_message=job.error_message,
+            word_count=job.word_count,
+            page_count=job.page_count,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+            completed_at=job.completed_at,
+        )
 
 
 # ── API Responses ──────────────────────────────────────────────
@@ -124,4 +143,4 @@ class JobListResponse(BaseModel):
     total: int
     limit: int
     offset: int
-    jobs: list[IngestionJobResponse]
+    jobs: list[IngestionJobSummary]
