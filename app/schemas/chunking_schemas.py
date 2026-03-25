@@ -159,8 +159,9 @@ class ChunkingRequest(BaseModel):
 class ChunkingResponse(BaseModel):
     job_id:         uuid.UUID
     tenant_id:      uuid.UUID
-    chunks_created: int
+    # chunks_created: Optional[int] = None
     chunk_strategy: str
+    config:         Optional[dict] = None
     status:         ChunkStatus
     message:        str
 

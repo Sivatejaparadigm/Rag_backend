@@ -1,92 +1,112 @@
 """Routes for chunking operations."""
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 import uuid
 
-from app.core.database import get_db
-from app.schemas.chunking_schemas import ChunkingRequest, ChunkingResponse, ChunkStrategy
+from app.core.database import get_db, AsyncSessionLocal
+from app.schemas.chunking_schemas import ChunkingRequest, ChunkingResponse, ChunkStrategy, ChunkStatus
 from app.repositories.job_repository import JobRepository
 from app.repositories.preprocessor_repository import PreprocessedDataRepository
 from app.repositories.chunk_repository import ChunkRepository
 from app.pipeline.chunking.chunking_pipeline import ChunkingPipeline
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+async def _run_chunking_in_background(
+    job_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    strategy: ChunkStrategy,
+    config,
+):
+    """Background worker — runs with its own DB session."""
+    async with AsyncSessionLocal() as db:
+        try:
+            job_repo = JobRepository(db)
+            pipeline = ChunkingPipeline(
+                job_repo=job_repo,
+                db=db,
+                strategy=strategy,
+                config=config,
+            )
+            result = await pipeline.run(job_id=job_id, tenant_id=tenant_id)
+            logger.info(
+                "Background chunking completed: job_id=%s strategy=%s result=%s",
+                job_id, strategy.value, result,
+            )
+        except Exception:
+            logger.exception(
+                "Background chunking failed: job_id=%s strategy=%s",
+                job_id, strategy.value,
+            )
 
 
 @router.post("/", response_model=ChunkingResponse)
 async def create_chunks(
     req: ChunkingRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> ChunkingResponse:
     """
-    Create chunks for a job.
-    
-    Minimum required:
-        {
-            "tenant_id": "<uuid>",
-            "job_id": "<uuid>",
-            "strategy": "recursive"
-        }
-    """
-    try:
-        job_repo = JobRepository(db)
-        preprocess_repo = PreprocessedDataRepository(db)
-        chunk_repo = ChunkRepository(db)
-        
-        # Load the job
-        job = await job_repo.get_job(job_id=req.job_id, tenant_id=req.tenant_id)
-        if not job:
-            raise ValueError(f"Job not found: {req.job_id}")
-        
-        # Load preprocessed data for this job
-        preprocessed_records = await preprocess_repo.list_by_job_id(
-            job_id=req.job_id, 
-            tenant_id=req.tenant_id
-        )
-        if not preprocessed_records:
-            raise ValueError(f"No preprocessed data found for job: {req.job_id}")
-        
-        # Select the correct config
-        config = None
-        if req.strategy == ChunkStrategy.FIXED:
-            config = req.fixed_config
-        elif req.strategy == ChunkStrategy.RECURSIVE:
-            config = req.recursive_config
-        elif req.strategy == ChunkStrategy.SEMANTIC:
-            config = req.semantic_config
-        elif req.strategy == ChunkStrategy.AGENTIC:
-            config = req.agentic_config
-        elif req.strategy == ChunkStrategy.PARENT_CHILD:
-            config = req.parent_child_config
+    Start chunking for a job (runs in background).
 
-        # Create chunking pipeline and run it
-        pipeline = ChunkingPipeline(
-            job_repo=job_repo,
-            db=db,
-            strategy=req.strategy,
-            config=config,
+    Returns immediately with status=pending.
+    Use GET /chunking/job/{job_id} to poll for results.
+    """
+    # ── Validate job and preprocessed data exist before accepting ──
+    job_repo = JobRepository(db)
+    preprocess_repo = PreprocessedDataRepository(db)
+
+    job = await job_repo.get_job(job_id=req.job_id, tenant_id=req.tenant_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job not found: {req.job_id}")
+
+    preprocessed_records = await preprocess_repo.list_by_job_id(
+        job_id=req.job_id, tenant_id=req.tenant_id,
+    )
+    if not preprocessed_records:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No preprocessed data found for job: {req.job_id}",
         )
-        
-        result = await pipeline.run(
-            job_id=req.job_id,
-            tenant_id=req.tenant_id,
-        )
-        
-        chunks_created = result.get("chunks_saved", 0) + result.get("parents_saved", 0)
-        
-        return ChunkingResponse(
-            job_id=req.job_id,
-            tenant_id=req.tenant_id,
-            chunks_created=chunks_created,
-            chunk_strategy=req.strategy.value if hasattr(req.strategy, 'value') else str(req.strategy),
-            message=result.get("message", f"Successfully created {chunks_created} chunks"),
-            status=result.get("status", "completed").value if hasattr(result.get("status", "completed"), 'value') else result.get("status", "completed"),
-        )
-        
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Chunking failed: {str(exc)}")
+
+    # ── Select the correct config ──
+    config = None
+    config_dict = None
+    if req.strategy == ChunkStrategy.FIXED:
+        config = req.fixed_config
+    elif req.strategy == ChunkStrategy.RECURSIVE:
+        config = req.recursive_config
+    elif req.strategy == ChunkStrategy.SEMANTIC:
+        config = req.semantic_config
+    elif req.strategy == ChunkStrategy.AGENTIC:
+        config = req.agentic_config
+    elif req.strategy == ChunkStrategy.PARENT_CHILD:
+        config = req.parent_child_config
+
+    if config is not None:
+        config_dict = config.model_dump()
+
+    # ── Fire background task ──
+    background_tasks.add_task(
+        _run_chunking_in_background,
+        job_id=req.job_id,
+        tenant_id=req.tenant_id,
+        strategy=req.strategy,
+        config=config,
+    )
+
+    return ChunkingResponse(
+        job_id=req.job_id,
+        tenant_id=req.tenant_id,
+        chunk_strategy=req.strategy.value,
+        config=config_dict,
+        status=ChunkStatus.PENDING,
+        message=f"Chunking task accepted and running in background using '{req.strategy.value}' strategy",
+    )
 
 
 @router.get("/job/{job_id}")
